@@ -1,0 +1,131 @@
+# ESP32 Sensor Server — Progress Log
+
+## What We Built Today
+
+A WiFi-connected ESP32 that reads sensor data and serves it as JSON over HTTP,
+discoverable on the local network by name using mDNS.
+
+---
+
+## Architecture
+
+```
+ESP32 (sensor node)
+  ├── connects to WiFi
+  ├── starts mDNS broadcast (esp32_cam1.local)
+  ├── starts HTTP server on port 80
+  │     └── GET /sensors → returns JSON
+  └── loop: reads sensors every 5s, updates shared data with mutex
+
+Python (laptop/Pi)
+  └── GET http://esp32_cam1.local/sensors → receives JSON
+```
+
+---
+
+## Arduino Libraries Used
+
+| Library | Purpose | Installation |
+|---------|---------|-------------|
+| `WiFi.h` | Connect ESP32 to WiFi network | Built-in with ESP32 board package |
+| `ESPAsyncWebServer` | HTTP server with async request handling | Arduino Library Manager — version 3.x by ESP32 Async |
+| `ArduinoJson` | Build and serialize JSON responses | Arduino Library Manager |
+| `ESPmDNS` | Broadcast device name on local network | Built-in with ESP32 board package |
+
+---
+
+## Key Concepts Learned
+
+### I2C
+- Two-wire protocol (SDA + SCL) for talking to sensors
+- Each device has a unique address (BH1750: 0x23, SCD40: 0x62, BMP280: 0x76)
+- Master (ESP32) initiates, slaves (sensors) respond
+- Always run I2C scanner first to verify wiring before writing sensor code
+
+### SPI
+- Four-wire protocol (MOSI, MISO, SCK, CS)
+- Full duplex — sends and receives simultaneously
+- CS pin selects which device to talk to
+- Write-only devices (displays) don't need MISO
+- ST7789 display needs DC (Data/Command) pin in addition to SPI pins
+- 3.3V logic level required — needs level shifter with 5V Arduino Uno
+
+### HTTP Server on ESP32
+- `ESPAsyncWebServer` runs in a background FreeRTOS task
+- `server.on("/path", HTTP_GET, handler)` registers an endpoint
+- Use `vTaskDelay` instead of `delay()` to avoid blocking background tasks
+- Server starts once in `setup()`, handles requests automatically
+
+### mDNS
+- Broadcasts device name on local network (e.g. `esp32_cam1.local`)
+- Resolves name to IP automatically — IP can change, name stays fixed
+- ESP32 side: `MDNS.begin(name)` + `MDNS.addService("http", "tcp", 80)`
+- Python side: use name instead of IP in URL
+- Requires devices to be on the same network
+- Does NOT work on networks with AP isolation enabled
+
+### Mutex (FreeRTOS)
+- Needed because server handler and main loop run in different FreeRTOS tasks
+- Both access shared sensor data — race condition without protection
+- `SemaphoreHandle_t mutex` declared globally, initialised in `setup()`
+- Must be initialised in `setup()`, not at global scope — FreeRTOS not ready yet
+- `xSemaphoreTake` to lock, `xSemaphoreGive` to unlock
+
+---
+
+## AP Isolation — Important Gotcha
+University/office/hotel WiFi often enables AP isolation, which blocks
+device-to-device communication on the same network. Symptoms:
+- ESP32 gets an IP and connects to WiFi successfully
+- Serial Monitor works fine
+- But HTTP requests never reach the ESP32
+- Fix: use a home network or mobile hotspot where AP isolation is disabled
+- Document this requirement in your project README
+
+---
+
+## Sensor Status
+
+| Sensor | Protocol | Address | Status |
+|--------|---------|---------|--------|
+| BH1750 (light) | I2C | 0x23 | ✓ Detected |
+| SCD40 (CO2) | I2C | 0x62 | ✓ Detected |
+| BMP280 (temp/pressure) | I2C / SPI | 0x76 | ✗ Faulty — discarded |
+
+---
+
+## Current Endpoint
+
+```
+GET http://esp32_cam1.local/sensors
+```
+
+Response:
+```json
+{"temperature": 26.6, "co2": 778}
+```
+
+Values are currently random (placeholders) — real sensor integration pending
+arrival of breadboard and jumper wires.
+
+---
+
+## Next Steps
+
+- [ ] Connect BH1750 and SCD40 to ESP32 once breadboard arrives
+- [ ] Replace random values with real sensor readings using Wire library
+- [ ] Build Python sensor client to poll `/sensors` periodically
+- [ ] Integrate sensor data with camera pipeline on the Pi/laptop side
+- [ ] Add mDNS to camera ESP32-CAMs as well
+- [ ] Add authentication to HTTP endpoints (API key — simple first step)
+- [ ] Set up ST7789 display once logic level converter arrives
+
+---
+
+## Hardware Notes
+
+- ESP32-CAM (AI-Thinker): safe I2C pins are GPIO14 (SDA) and GPIO15 (SCL)
+- Bare ESP32: standard I2C pins are GPIO21 (SDA) and GPIO22 (SCL)
+- Flash LED on ESP32-CAM: GPIO4, controlled via PWM (ledcWrite)
+- Always power ESP32 from clean 5V supply — weak supply causes brownout reboots
+- ST7789 display: 3.3V logic only — needs level shifter with Arduino Uno
