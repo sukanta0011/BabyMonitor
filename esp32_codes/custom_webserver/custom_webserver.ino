@@ -3,11 +3,11 @@
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 
-// const char *ssid = "ufch";
-// const char *password = "0090271BEB73";
+const char* ssid = "TP-Link_509A";
+const char* password = "84710574";
 
-const char* ssid = "moto g54 5G";
-const char* password = "sukanta00";
+// const char* ssid = "moto g54 5G";
+// const char* password = "sukanta00";
 const char* mdnsName = "esp32_cam1";
 
 AsyncWebServer server(80);
