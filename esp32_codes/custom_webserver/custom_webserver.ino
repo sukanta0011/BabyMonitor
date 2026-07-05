@@ -2,103 +2,120 @@
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
+#include "Sensor.h"
 
 const char* ssid = "TP-Link_509A";
 const char* password = "84710574";
-
-// const char* ssid = "moto g54 5G";
-// const char* password = "sukanta00";
+const int SDA_PIN = 15;
+const int SCL_PIN = 14;
 const char* mdnsName = "esp32_cam1";
+
+int light_sensor_on = 0;
+int co2_sensor_on = 0;
 
 AsyncWebServer server(80);
 String output;
 JsonDocument doc;
+BH1750 light_sensor(0x23);
+SCD40 co2_sensor(0x62);
 SemaphoreHandle_t mutex;
-
-typedef struct s_sensor
-{
-  float temperature;
-  int   co2;
-}       t_sensor;
-
-t_sensor sensors;
 
 
 int connect_to_wifi() {
   int max_try = 20;
-
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED && max_try > 0) {
     delay(1000);
     max_try -= 1;
     Serial.println("WiFi connection unsuccessful, retrying...");
   }
-  if(max_try == 0)
-    return (0);
+  if (max_try == 0) return 0;
   Serial.println(WiFi.localIP());
-  return (1);
+  return 1;
 }
 
-void start_mdns()
-{
+
+void start_mdns() {
   if (!MDNS.begin(mdnsName)) {
     Serial.println("Error setting up MDNS responder!");
-    while(1) {
-      delay(1000);
-    }
+    while(1) delay(1000);
   }
   MDNS.addService("http", "tcp", 80);
-  Serial.println("mDNS responder started. Access your ESP32 at http://" + String(mdnsName) + ".local");
+  Serial.println("mDNS started: http://" + String(mdnsName) + ".local");
 }
 
-void  update_sensor_data()
-{
+
+void update_sensor_data() {
   xSemaphoreTake(mutex, portMAX_DELAY);
-  doc["temperature"] = sensors.temperature;
-  doc["co2"] = sensors.co2;
+
+  // BH1750
+  JsonObject bh = doc["bh1750"].to<JsonObject>();
+  if (light_sensor_on) {
+    bh["status"] = "on";
+    bh["error"] = "";
+    bh["lux"] = light_sensor.getLux();
+  } else {
+    bh["status"] = "off";
+    bh["error"] = "BH1750 not responding";
+    bh["lux"] = 0;
+  }
+
+  // SCD40
+  JsonObject scd = doc["scd40"].to<JsonObject>();
+  if (co2_sensor_on) {
+    scd["status"] = "on";
+    scd["error"] = "";
+    scd["co2"] = co2_sensor.getCO2();
+    scd["temperature"] = co2_sensor.getTemperature();
+    scd["humidity"] = co2_sensor.getHumidity();
+  } else {
+    scd["status"] = "off";
+    scd["error"] = "SCD40 not responding";
+    scd["co2"] = 0;
+    scd["temperature"] = 0;
+    scd["humidity"] = 0;
+  }
+
   serializeJson(doc, output);
   xSemaphoreGive(mutex);
-}
-
-int get_data_from_temperatue_sensor()
-{
-  sensors.temperature = random(100, 300) / 10.0;
-  return (1);
-}
-
-int get_data_from_co2_sensor()
-{
-  sensors.co2 = random(500, 800) ;
-  return (1);
 }
 
 
 void setup() {
   Serial.begin(115200);
+  Wire.begin(SDA_PIN, SCL_PIN);
   mutex = xSemaphoreCreateMutex();
 
-  if(connect_to_wifi()){
-    doc["temperature"] = 0.0;
-    doc["co2"] = 0;
-    serializeJson(doc, output);
-
+  if (connect_to_wifi()) {
+    light_sensor_on = light_sensor.begin();
+    co2_sensor_on = co2_sensor.begin();
+    update_sensor_data();
     start_mdns();
 
     server.on("/sensors", HTTP_GET, [](AsyncWebServerRequest *request){
-      Serial.println("Request received!");
       xSemaphoreTake(mutex, portMAX_DELAY);
-      request->send(200, "application/json", output);
+      if (light_sensor_on && co2_sensor_on)
+        request->send(200, "application/json", output);
+      else if (!light_sensor_on && !co2_sensor_on)
+        request->send(500, "application/json", output);
+      else
+        request->send(206, "application/json", output);
       xSemaphoreGive(mutex);
     });
+
     server.begin();
     Serial.println("Server started.");
   }
 }
 
+
 void loop() {
-  get_data_from_temperatue_sensor();
-  get_data_from_co2_sensor();
+  delay(10000);
+  // if (light_sensor_on)
+    light_sensor_on = light_sensor.read();
+
+  // if (co2_sensor_on)
+    co2_sensor_on = co2_sensor.read();
+
   update_sensor_data();
-  Serial.printf("temperature: %f, CO2: %d\n", sensors.temperature, sensors.co2);
-  delay(5000);
 }
