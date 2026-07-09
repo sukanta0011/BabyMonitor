@@ -2,9 +2,7 @@ import cv2
 from dataclasses import dataclass, field
 import numpy as np
 import threading
-
-
-
+from .face_detector import BoundingBoxSmoother
 
 
 @dataclass
@@ -16,6 +14,7 @@ class Camera:
     ret: int | None = None
     frame: np.ndarray | None = None
     thread: threading.Thread | None = None
+    smoother: BoundingBoxSmoother = field(default_factory=lambda: BoundingBoxSmoother(20))
 
 
 class CameraStream:
@@ -24,7 +23,10 @@ class CameraStream:
 
     def is_connected(self) -> bool:
         print(f"Connecting to stream: {self.camera.ip}")
-        self.camera.capture = cv2.VideoCapture(self.camera.ip)
+        if self.camera.ip == "webcam":
+            self.camera.capture = cv2.VideoCapture(0)
+        else:
+            self.camera.capture = cv2.VideoCapture(self.camera.ip)
         self.camera.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1) # Avoid storing frames
 
         if not self.camera.capture.isOpened():
@@ -41,7 +43,7 @@ class CameraStream:
         self.camera.thread.start()
         print(f"'{self.camera.name}' started")
 
-    def _continue_capturing(self):
+    def _continue_capturing(self) -> None:
         while True:
             ret, frame = self.camera.capture.read()
             if ret:

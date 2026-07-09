@@ -1,0 +1,88 @@
+import requests
+import threading
+import time
+from datetime import datetime
+from typing import Deque, Dict, Callable
+from dataclasses import dataclass
+from functools import wraps
+
+
+class ConnectionFailure(Exception):
+    pass
+
+
+def reconnect(max_try: int, wait_time: int) -> Callable:
+    def decorator(func) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            for i in range(max_try):
+                try:
+                    return func(*args, **kwargs)
+                except requests.exceptions.ConnectTimeout:
+                    time.sleep(wait_time)
+                    print(
+                        f"Sensor stream is unreachable. Reconnecting {i}/{max_try}...")
+            raise ConnectionFailure(
+                f"Connection remain unreachable after {max_try} attempts")
+        return wrapper
+    return decorator
+
+
+@dataclass
+class Sensor:
+    address: str
+    data: Deque
+    lock: threading.Lock
+    thread: threading.Thread | None = None
+    max_size: int = 50
+
+
+class SensorStream:
+    def __init__(self, sensor: Sensor):
+        self.sensor = sensor
+
+    def is_connected(self) -> bool:
+        try:
+            self._get_response(self.sensor.address, 5)
+        except ConnectionFailure:
+            print("Sensor stream is unreachable.")
+            return False
+        except Exception as e:
+            print(f"Error: {e}")
+            return False
+        return True
+    
+    @reconnect(max_try=5, wait_time=5)
+    def _get_response(self, address: str, timeout: int) -> Dict:
+        return requests.get(url=address, timeout=timeout)
+    
+    def get_latest_data(self) -> Dict:
+        with self.sensor.lock:
+            latest_data = self.sensor.data[-1]
+        return latest_data
+    
+    def start(self) -> None:
+        self.sensor.thread = threading.Thread(
+            target=self._continue_reading,
+            args=(), daemon=True
+        )
+        self.sensor.thread.start()
+        print(f"Sensor streaming started.")
+
+    def _continue_reading(self) -> None:
+        while True:
+            try:
+                response = self._get_response(self.sensor.address, 5)
+                if response.status_code != 500:
+                    with self.sensor.lock:
+                        if len(self.sensor.data) > self.sensor.max_size:
+                            self.sensor.data.popleft()
+                        self.sensor.data.append(
+                            {"time_stamp": datetime.now(),
+                            "data": response.json()})
+                else:
+                    print(f"{response.text}")
+            except ConnectionFailure:
+                pass
+
+            time.sleep(10)

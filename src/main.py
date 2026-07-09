@@ -3,18 +3,24 @@ from dataclasses import dataclass
 import numpy as np
 import time
 import threading
+from collections import deque
 from .global_variables import *
 from .helper_functions import merge_frames_horizontally, merge_image_by_resizing
 from .camera_stream import Camera, CameraStream
+from .sensor_stream import Sensor, SensorStream
 
 
-global_lock = threading.Lock()
+camera_data_lock = threading.Lock()
+sensor_data_lock = threading.Lock()
 
 
 CAMERAS = [
-    Camera(ip=CAM1, name="camera1", lock=global_lock),
-    Camera(ip=CAM2, name="camera2", lock=global_lock),
+    Camera(ip=CAM1, name="camera1", lock=camera_data_lock),
+    Camera(ip=CAM2, name="camera2", lock=camera_data_lock),
+    Camera(ip="webcam", name="camera2", lock=camera_data_lock),
 ]
+SENSOR = Sensor(
+    address=SENSORS, data=deque(), lock=sensor_data_lock)
 
 
 def main():
@@ -30,7 +36,7 @@ def main():
 
     while True:
         # Display the live frame in a desktop window
-        with global_lock:
+        with camera_data_lock:
             frames = tuple(stream.camera.frame for stream in working_streams)
         if any(f is None for f in frames):
             continue
