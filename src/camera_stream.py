@@ -10,11 +10,13 @@ class Camera:
     ip: str
     name: str
     lock: threading.Lock
+    event: threading.Event
     capture: cv2.VideoCapture | None = None
     ret: int | None = None
     frame: np.ndarray | None = None
     thread: threading.Thread | None = None
-    smoother: BoundingBoxSmoother = field(default_factory=lambda: BoundingBoxSmoother(20))
+    smoother: BoundingBoxSmoother = \
+        field(default_factory=lambda: BoundingBoxSmoother(1))
 
 
 class CameraStream:
@@ -40,11 +42,13 @@ class CameraStream:
         self.camera.thread = threading.Thread(
             target=self._continue_capturing, args=(), daemon=True
             )
+        self.camera.event.set()
         self.camera.thread.start()
         print(f"'{self.camera.name}' started")
 
     def _continue_capturing(self) -> None:
         while True:
+            self.camera.event.wait()
             ret, frame = self.camera.capture.read()
             if ret:
                 with self.camera.lock:
