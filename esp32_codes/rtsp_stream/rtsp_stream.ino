@@ -11,11 +11,8 @@ WiFiClient rtspClient;
 
 // // --- Wi-Fi Settings ---
 const char* ssid = "TP-Link_509A";
-const char* password = "84710574";
+const char* password = "******";
 
-// --- Wi-Fi Settings ---
-// const char* ssid = "sukantaPC";
-// const char* password = "Sukanta00@";
 
 // --- AI-Thinker Hardware Pin Mapping ---
 #define PWDN_GPIO_NUM     32
