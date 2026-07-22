@@ -5,7 +5,7 @@
 #include "Sensor.h"
 
 const char* ssid = "TP-Link_509A";
-const char* password = "84710574";
+const char* password = "*******";
 const int SDA_PIN = 15;
 const int SCL_PIN = 14;
 const char* mdnsName = "esp32_cam1";
