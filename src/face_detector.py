@@ -7,7 +7,7 @@ import time
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from collections import deque
-import numpy as np
+import cv2
 from dataclasses import dataclass
 if TYPE_CHECKING:
     from .camera_stream import CameraStream
@@ -54,12 +54,12 @@ class FaceDetector(ABC):
         pass
     
     @abstractmethod
-    def extract_face_info(self):
+    def extract_face_info(self) -> List[Result]:
         pass
 
 
 class MediaPiperDetector(FaceDetector):
-    def initialize_the_model(self):
+    def initialize_the_model(self) -> None:
         base_options = python.BaseOptions(
             model_asset_path='face_detection_models/blaze_face_full_range.tflite')
         options = vision.FaceDetectorOptions(

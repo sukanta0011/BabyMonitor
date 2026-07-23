@@ -11,7 +11,7 @@
 // Enter your WiFi credentials
 // ===========================
 const char* ssid = "TP-Link_509A";
-const char* password = "*******";
+const char* password = "84710574";
 
 void startCameraServer();
 void setupLedFlash();
