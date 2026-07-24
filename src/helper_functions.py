@@ -1,7 +1,9 @@
 import cv2
 import numpy as np
 from typing import Tuple, Callable
+import threading
 
+print_lock = threading.Lock()
 
 def merge_image_using_padding(frames: Tuple[np.ndarray, ...]) -> np.ndarray:
     target_h = max([frame.shape[0] for frame in frames])
@@ -40,3 +42,7 @@ def merge_frames_horizontally(frames: Tuple[np.ndarray, ...],
     final_frame = method(frames)
 
     return final_frame
+
+def print_message(message: str):
+    with print_lock:
+        print(message)

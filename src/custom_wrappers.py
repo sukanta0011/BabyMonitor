@@ -20,4 +20,4 @@ def reconnect(max_try: int, wait_time: int) -> Callable:
             raise ConnectionFailure(
                 f"Connection remain unreachable after {max_try} attempts")
         return wrapper
-    return decorator
+    return decorator          

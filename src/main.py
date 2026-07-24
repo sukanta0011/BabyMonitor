@@ -16,9 +16,9 @@ sensor_data_lock = threading.Lock()
 
 
 CAMERAS = [
-    Camera(ip=CAM1, name="camera1", lock=camera_data_lock, event=threading.Event()),
-    Camera(ip=CAM2, name="camera2", lock=camera_data_lock, event=threading.Event()),
-    Camera(ip="webcam", name="camera2", lock=camera_data_lock,event=threading.Event()),
+    Camera(ip=CAM1, name="cam1", lock=camera_data_lock, event=threading.Event()),
+    Camera(ip=CAM2, name="s3_cam1", lock=camera_data_lock, event=threading.Event()),
+    Camera(ip="webcam", name="webcam", lock=camera_data_lock,event=threading.Event()),
 ]
 SENSOR = Sensor(
     address=SENSORS, data=deque(), lock=sensor_data_lock)
@@ -70,16 +70,18 @@ def start_best_camera_feed():
     face_detectors = [MediaPiperDetector(stream) for stream in working_streams]
     best_stream = BestCameraStream()
     stream_manager = CameraStreamManager(face_detectors, best_stream)
+
+    stream_manager.start_camera_feed()
     while True:
-        stream_manager.start_camera_feed()
         if best_stream.best_camera_index:
             frame = CAMERAS[best_stream.best_camera_index].frame
-            if frame:
+            if frame is not None:
                 cv2.imshow("ESP32-CAM Baby Monitor Feed", frame)
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        if (cv2.waitKey(1) & 0xFF == ord('q')) or\
+                best_stream.detection_failure_event.is_set():
             break
-        time.sleep(0.05)
+        # time.sleep(1)
 
     for stream in working_streams:
         stream.camera.capture.release()
@@ -88,4 +90,5 @@ def start_best_camera_feed():
 
 
 if __name__ == "__main__":
+    # start_all_camera_feed()
     start_best_camera_feed()

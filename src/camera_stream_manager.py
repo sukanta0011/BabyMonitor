@@ -6,6 +6,7 @@ import threading
 from .face_detector import FaceDetector, Result
 from .custom_errors import FaceDetectionError
 from .camera_stream import Camera
+from .helper_functions import print_message
 
 
 @dataclass
@@ -18,9 +19,10 @@ class BestCameraStream:
 
 
 class CameraStreamManager:
-    def __init__(self, face_detectors: List[FaceDetector],
-                 best_stream: BestCameraStream,
-                 face_detection_threshold: float = 0.6):
+    def __init__(
+            self, face_detectors: List[FaceDetector],
+            best_stream: BestCameraStream,
+            face_detection_threshold: float = 0.6):
         self.face_detectors = face_detectors
         self.face_detection_threshold = face_detection_threshold
         self.best_stream = best_stream
@@ -32,9 +34,10 @@ class CameraStreamManager:
 
     def _run_detection_loop(self) -> None:
         idx = self.best_stream.best_camera_index
-        time_out = 5
-        sleep_time = 0.5
-        time_since_detection_failed = 0
+        time_out = 2
+        sleep_time = 0.2
+        time_since_detection_failed = time.time()
+        single_result = Result(face=False)
         while True:
             try:
                 if not idx:
@@ -42,18 +45,21 @@ class CameraStreamManager:
                     self.stop_all_cam()
                     self.start_single_cam(
                         self.face_detectors[idx].stream.camera)
+                self._wait_for_frame_detection(self.face_detectors[idx])
                 result: Result = self.face_detectors[idx].extract_face_info()
-                if not result.face or\
-                        result.confidence_level < self.face_detection_threshold:
+                if len(result) > 0:
+                    single_result = result[0]
+                if not single_result.face or\
+                        single_result.confidence_level < self.face_detection_threshold:
                     idx = self.retry_face_detection(idx)
-                time_since_detection_failed = 0
+                time_since_detection_failed = time.time()
                 time.sleep(sleep_time)
             except FaceDetectionError as e:
-                print(e)
-                if time_since_detection_failed > time_out:
-                    print("Warning: face detection failure")
+                print_message(e)
+                if (time.time() - time_since_detection_failed) > time_out:
+                    print_message("Warning: face detection failure")
                     self.best_stream.detection_failure_event.set()
-                time_since_detection_failed += sleep_time
+                print_message(f"Retrying for {time.time() - time_since_detection_failed}s")
 
             with self.best_stream.lock:
                 self.best_stream.best_camera_index = idx
@@ -64,40 +70,57 @@ class CameraStreamManager:
         while (attempts < retry):
             results: List[Result] = []
             for detector in self.face_detectors:
-                if len(detector.extract_face_info()) > 1:
-                    results.append(
-                        detector.extract_face_info()[0])
-            scores = [
-                result.confidence_level if result.face else 0
-                for result in results]
+                self._wait_for_frame_detection(detector)
+                faces = detector.extract_face_info()
+                if len(faces) > 1:
+                    results.append(faces[0])
+                else:
+                    results.append(Result(face=False))
+            scores = [result.confidence_level for result in results]
             best_camera_index = np.argmax(scores)
             if scores[best_camera_index] > self.face_detection_threshold:
                 return best_camera_index
             attempts += 1
             time.sleep(1)
-            print(f"best camera detection failed {attempts}/{retry}. Retrying ...")
-            
+            print_message(f"best camera detection failed {attempts}/{retry}. Retrying ...")
         raise FaceDetectionError("Unable to detect face by any camera")
+
+    def _wait_for_frame_detection(
+            self, detector: FaceDetector, timeout: int = 2):
+        wait_time = 0
+        while detector.stream.camera.frame is None:
+            if wait_time < timeout:
+                time.sleep(0.1)
+                wait_time += 0.1
+            else:
+                print_message(
+                    "Unable to get camera feed from "
+                    f"'{detector.stream.camera.name}'"
+                )
+                self.get_best_camera()
 
     def retry_face_detection(
             self, cam_idx: int,
             retry: int = 3) -> int:
         attempts = 0
+        single_result = Result(face=False)
         while (attempts < retry):
             result: Result = \
                 self.face_detectors[cam_idx].extract_face_info()
-            if result.face and\
-                    result.confidence_level >\
+            if len(result) > 0:
+                single_result = result[0]
+            if single_result.face and\
+                    single_result.confidence_level >\
                         self.face_detection_threshold:
                 return cam_idx
             else:
-                print(
+                print_message(
                     "Face detection quality decreased for "
                     f"{self.face_detectors[cam_idx].stream.camera.name}. "
                     f"Attempt {attempts + 1}/{retry}.")
             attempts += 1
             time.sleep(1)
-        return None
+        return self.get_best_camera()
 
     def start_all_cam(self):
         for face_detector in self.face_detectors:
