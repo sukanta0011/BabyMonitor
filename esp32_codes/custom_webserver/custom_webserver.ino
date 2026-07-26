@@ -5,18 +5,12 @@
 #include "Sensor.h"
 
 const char* ssid = "TP-Link_509A";
-const char* password = "84710574";
+const char* password = "******";
 
-// ESP32 CAM
-// const int SDA_PIN = 15;
-// const int SCL_PIN = 14;
-// const char* mdnsName = "esp32_cam1";
-
-// ESP32-s3-cam
-const int SDA_PIN = 43;
-const int SCL_PIN = 44;
-const char* mdnsName = "esp32_s3_cam1";
-
+ESP32 CAM
+const int SDA_PIN = 15;
+const int SCL_PIN = 14;
+const char* mdnsName = "esp32_sensor1";
 
 int light_sensor_on = 0;
 int co2_sensor_on = 0;

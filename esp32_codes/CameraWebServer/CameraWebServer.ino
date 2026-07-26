@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "esp_camera.h"
 #include <WiFi.h>
+#include <ESPmDNS.h>
 
 // ===========================
 // Select camera model in board_config.h
@@ -11,10 +12,22 @@
 // Enter your WiFi credentials
 // ===========================
 const char* ssid = "TP-Link_509A";
-const char* password = "84710574";
+const char* password = "******";
+const char* mdnsName = "esp32_cam1";
 
 void startCameraServer();
 void setupLedFlash();
+
+
+void start_mdns() {
+  if (!MDNS.begin(mdnsName)) {
+    Serial.println("Error setting up MDNS responder!");
+    while(1) delay(1000);
+  }
+  MDNS.addService("http", "tcp", 80);
+  Serial.println("mDNS started: http://" + String(mdnsName) + ".local");
+}
+
 
 void setup() {
   Serial.begin(115200);
@@ -123,6 +136,8 @@ void setup() {
   Serial.print("Camera Ready! Use 'http://");
   Serial.print(WiFi.localIP());
   Serial.println("' to connect");
+
+  start_mdns()
 }
 
 void loop() {
