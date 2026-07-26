@@ -1,14 +1,17 @@
 import streamlit as st
 import cv2
 import time
+from typing import Any, Dict
 from .backend.sensor_thresholds import (
     TEMPERATURE_THRESHOLD,
     HUMIDITY_THRESHOLD,
     CO2_THRESHOLD,
     LIGHT_THRESHOLD,
-    SensorLevel
+    SensorLevel,
+    Threshold
 )
-from .backend.camera_stream_manager import BestCameraStream, FaceDetectionStatus
+from .backend.camera_stream_manager import (
+    BestCameraStream, FaceDetectionStatus)
 from .backend.sensor_stream import SensorStream
 from .global_variables import SHUTDOWN_EVENT
 
@@ -23,13 +26,25 @@ LEVEL_DISPLAY = {
 
 
 ALERT_MESSAGES = {
-    "Light": {SensorLevel.ALERT_LOW: "Too dark", SensorLevel.ALERT_HIGH: "Too bright"},
-    "CO2": {SensorLevel.ALERT_HIGH: "CO2 too high — ventilate room"},
-    "Temperature": {SensorLevel.ALERT_LOW: "Room too cold", SensorLevel.ALERT_HIGH: "Room too hot"},
-    "Humidity": {SensorLevel.ALERT_LOW: "Air too dry", SensorLevel.ALERT_HIGH: "Air too humid"},
+    "Light": {
+        SensorLevel.ALERT_LOW: "Too dark",
+        SensorLevel.ALERT_HIGH: "Too bright"},
+    "CO2": {
+        SensorLevel.ALERT_HIGH: "CO2 too high — ventilate room"},
+    "Temperature": {
+        SensorLevel.ALERT_LOW: "Room too cold",
+        SensorLevel.ALERT_HIGH: "Room too hot"},
+    "Humidity": {
+        SensorLevel.ALERT_LOW: "Air too dry",
+        SensorLevel.ALERT_HIGH: "Air too humid"},
 }
 
-def render_metric(placeholder_col, label, value, unit, threshold):
+
+def render_metric(placeholder_col: st,
+                  label: str,
+                  value: Any, unit: str,
+                  threshold: Threshold
+                  ) -> Dict[Any, Any] | None:
     if value == "—":
         placeholder_col.metric(label, "—")
         return None
@@ -41,7 +56,9 @@ def render_metric(placeholder_col, label, value, unit, threshold):
     return None
 
 
-def run_dashboard(best_stream: BestCameraStream, sensor_stream: SensorStream):
+def run_dashboard(
+        best_stream: BestCameraStream,
+        sensor_stream: SensorStream) -> None:
     st.set_page_config(page_title="Baby Monitor", layout="wide")
     st.title("Baby Monitor Dashboard")
 
@@ -54,7 +71,6 @@ def run_dashboard(best_stream: BestCameraStream, sensor_stream: SensorStream):
     with col2:
         sensor_placeholder = st.empty()
 
-    
     while not SHUTDOWN_EVENT.is_set():
         with best_stream.lock:
             frame = best_stream.frame
@@ -76,7 +92,9 @@ def run_dashboard(best_stream: BestCameraStream, sensor_stream: SensorStream):
             status_placeholder.warning(message.text)
         else:
             score = round(result.confidence_level, 2) if result else 0.0
-            status_placeholder.success(f"Monitoring normally — confidence: {score}")
+            status_placeholder.success(
+                f"Monitoring normally — confidence: {score}"
+                )
 
         try:
             latest = sensor_stream.get_latest_data()
@@ -93,10 +111,18 @@ def run_dashboard(best_stream: BestCameraStream, sensor_stream: SensorStream):
                     humidity = round(humidity, 1)
                 alerts = []
                 for msg in [
-                    render_metric(st, "Light", bh.get("lux", "—"), "lux", LIGHT_THRESHOLD),
-                    render_metric(st, "CO2", scd.get("co2", "—"), "ppm", CO2_THRESHOLD),
-                    render_metric(st, "Temperature", temp, "°C", TEMPERATURE_THRESHOLD),
-                    render_metric(st, "Humidity", humidity, "%", HUMIDITY_THRESHOLD),
+                    render_metric(
+                        st, "Light", bh.get("lux", "—"),
+                        "lux", LIGHT_THRESHOLD),
+                    render_metric(
+                        st, "CO2", scd.get("co2", "—"),
+                        "ppm", CO2_THRESHOLD),
+                    render_metric(
+                        st, "Temperature", temp, "°C",
+                        TEMPERATURE_THRESHOLD),
+                    render_metric(
+                        st, "Humidity", humidity, "%",
+                        HUMIDITY_THRESHOLD),
                 ]:
                     if msg:
                         alerts.append(msg)

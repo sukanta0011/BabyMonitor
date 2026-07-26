@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 import mediapipe as mp
-from typing import List, TYPE_CHECKING, Tuple
+from typing import List, Tuple, TYPE_CHECKING, Deque, Any
 from abc import ABC, abstractmethod
 import time
 from mediapipe.tasks import python
@@ -21,19 +21,21 @@ class Result:
 
 
 class BoundingBoxSmoother:
-    def __init__(self, window: int = 10):
-        self.xs = deque(maxlen=window)
-        self.ys = deque(maxlen=window)
-        self.ws = deque(maxlen=window)
-        self.hs = deque(maxlen=window)
+    def __init__(self, window: int = 10) -> None:
+        self.xs: Deque = deque(maxlen=window)
+        self.ys: Deque = deque(maxlen=window)
+        self.ws: Deque = deque(maxlen=window)
+        self.hs: Deque = deque(maxlen=window)
 
-    def update(self, x: int, y: int, w: int, h: int):
+    def update(
+            self, x: int, y: int,
+            w: int, h: int) -> None:
         self.xs.append(x)
         self.ys.append(y)
         self.ws.append(w)
         self.hs.append(h)
 
-    def get_smooth(self):
+    def get_smooth(self) -> Tuple | None:
         if not self.xs:
             return None
         return (
@@ -45,7 +47,7 @@ class BoundingBoxSmoother:
 
 
 class FaceDetector(ABC):
-    def __init__(self, camera_stream: CameraStream):
+    def __init__(self, camera_stream: CameraStream) -> None:
         self.stream = camera_stream
         self.initialize_the_model()
 
@@ -56,7 +58,7 @@ class FaceDetector(ABC):
     @abstractmethod
     def close(self) -> None:
         pass
-    
+
     @abstractmethod
     def extract_face_info(self) -> List[Result]:
         pass
@@ -65,7 +67,8 @@ class FaceDetector(ABC):
 class MediaPiperDetector(FaceDetector):
     def initialize_the_model(self) -> None:
         base_options = python.BaseOptions(
-            model_asset_path='face_detection_models/blaze_face_full_range.tflite')
+            model_asset_path='face_detection_models/' +
+            'blaze_face_full_range.tflite')
         options = vision.FaceDetectorOptions(
             base_options=base_options,
             running_mode=vision.RunningMode.IMAGE)
@@ -82,8 +85,8 @@ class MediaPiperDetector(FaceDetector):
         raw_info = self.detector.detect(mp_image)
         return self._store_face_info(raw_info)
 
-    def _store_face_info(self, raw_info):
-        results: List[Result]= []
+    def _store_face_info(self, raw_info: Any) -> List[Result]:
+        results: List[Result] = []
         for info in raw_info.detections:
             results.append(Result(
                 face=True,
@@ -99,16 +102,18 @@ class MediaPiperDetector(FaceDetector):
         camera = self.stream.camera
         for result in results:
             if result.face:
-                x_c, y_c = result.face_region.origin_x,\
+                x_c, y_c = result.face_region.origin_x, \
                     result.face_region.origin_y
                 width_c = result.face_region.width
                 height_c = result.face_region.height
                 camera.smoother.update(x_c, y_c, width_c, height_c)
                 x, y, w, h = camera.smoother.get_smooth()
 
-                cv2.rectangle(camera.frame, (x, y), (x + w, y + h), (255, 0, 0), 1)
-                cv2.putText(camera.frame, str(round(result.confidence_level, 2)),
-                            (x, y - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+                cv2.rectangle(
+                    camera.frame, (x, y), (x + w, y + h), (255, 0, 0), 1)
+                cv2.putText(
+                    camera.frame, str(round(result.confidence_level, 2)),
+                    (x, y - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
                 # cv2.circle(
                 #     camera.frame,
                 #     (int(result.left_eye.x * camera.frame.shape[1]),
@@ -116,12 +121,9 @@ class MediaPiperDetector(FaceDetector):
                 #         2, (255, 0, 0), 1)
 
 
-
 if __name__ == "__main__":
-    from .camera_stream import Camera, CameraStream, BoundingBoxSmoother
+    from .camera_stream import Camera
     import threading
-    import cv2
-    import time
 
     test_lock = threading.Lock()
 
@@ -144,4 +146,3 @@ if __name__ == "__main__":
     stream.camera.capture.release()
     cv2.destroyAllWindows()
     print("Stream closed.")
-

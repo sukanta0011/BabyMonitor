@@ -69,15 +69,18 @@ class CameraStreamManager:
                     #     self.face_detectors[idx].stream.camera)
                 self._wait_for_frame_detection(self.face_detectors[idx])
                 if not SHUTDOWN_EVENT.is_set():
-                    result: Result = self.face_detectors[idx].extract_face_info()
+                    result: Result = \
+                        self.face_detectors[idx].extract_face_info()
                     if len(result) > 0:
                         single_result = result[0]
                     else:
                         single_result = Result(face=False)
-                    if (not single_result.face or\
-                            single_result.confidence_level < self.face_detection_threshold) and \
+                    if (not single_result.face or
+                            single_result.confidence_level <
+                            self.face_detection_threshold) and \
                             not SHUTDOWN_EVENT.is_set():
-                        print_message("Face quality falls below threshold, trying again")
+                        print_message(
+                            "Face quality falls below threshold, trying again")
                         idx = self.retry_face_detection(idx)
                     time_since_detection_failed = time.time()
                     time.sleep(sleep_time)
@@ -85,20 +88,23 @@ class CameraStreamManager:
                 print_message(e)
                 if (time.time() - time_since_detection_failed) > time_out:
                     msg = "Warning: face detection failure"
-                    self.best_stream.message.status = FaceDetectionStatus.WARNING
+                    self.best_stream.message.status = \
+                        FaceDetectionStatus.WARNING
                     self.best_stream.message.text = msg
                     print_message(msg)
                     self.best_stream.detection_failure_event.set()
                     self.trigger_alarm()
-                    
-                msg = f"Retrying for {time.time() - time_since_detection_failed}s"
+
+                msg = "Retrying for " + \
+                      f"{time.time() - time_since_detection_failed}s"
                 self.best_stream.message.status = FaceDetectionStatus.ERROR
                 self.best_stream.message.text = msg
                 print_message(msg)
 
             if idx is not None and not SHUTDOWN_EVENT.is_set():
                 with self.best_stream.lock:
-                    self.best_stream.message.status = FaceDetectionStatus.NORMAL
+                    self.best_stream.message.status = \
+                        FaceDetectionStatus.NORMAL
                     self.best_stream.message.text = "Face detected"
                     self.best_stream.index = idx
                     self.best_stream.name = \
@@ -107,7 +113,7 @@ class CameraStreamManager:
                         self.face_detectors[idx].stream.camera.frame
                     self.best_stream.result = single_result
 
-    def trigger_alarm(self):
+    def trigger_alarm(self) -> None:
         while not SHUTDOWN_EVENT.is_set() and \
                 self.best_stream.detection_failure_event.is_set():
             try:
@@ -116,7 +122,6 @@ class CameraStreamManager:
             except FaceDetectionError:
                 print_message("ERROR......")
                 time.sleep(0.2)
-
 
     def get_best_camera(self, retry: int = 3) -> int:
         attempts = 0
@@ -127,7 +132,8 @@ class CameraStreamManager:
                 self._wait_for_frame_detection(detector)
                 faces = detector.extract_face_info()
                 if len(faces) > 0:
-                    print_message(f"best camera name: {detector.stream.camera.name}")
+                    print_message(
+                        f"best camera name: {detector.stream.camera.name}")
                     print_message(faces)
                     results.append(faces[0])
                 else:
@@ -146,9 +152,11 @@ class CameraStreamManager:
         raise FaceDetectionError("Unable to detect face by any camera")
 
     def _wait_for_frame_detection(
-            self, detector: FaceDetector, timeout: int = 2):
-        wait_time = 0
-        while (detector.stream.camera.frame is None and not SHUTDOWN_EVENT.is_set()):
+            self, detector: FaceDetector,
+            timeout: int = 2) -> None:
+        wait_time = 0.0
+        while (detector.stream.camera.frame is None and
+                not SHUTDOWN_EVENT.is_set()):
             if wait_time < timeout:
                 print_message(f"Waiting for {detector.stream.camera.name}")
                 time.sleep(0.1)
@@ -172,7 +180,7 @@ class CameraStreamManager:
                 single_result = result[0]
             if single_result.face and\
                     single_result.confidence_level >\
-                        self.face_detection_threshold:
+                    self.face_detection_threshold:
                 return cam_idx
             else:
                 msg = "Face detection quality decreased for " +\
@@ -185,17 +193,16 @@ class CameraStreamManager:
             time.sleep(1)
         return self.get_best_camera()
 
-    def start_all_cam(self):
+    def start_all_cam(self) -> None:
         for face_detector in self.face_detectors:
             self.start_single_cam(face_detector.stream.camera)
-    
-    def stop_all_cam(self):
+
+    def stop_all_cam(self) -> None:
         for face_detector in self.face_detectors:
             self.stop_single_cam(face_detector.stream.camera)
-    
+
     def start_single_cam(self, camera: Camera) -> None:
         camera.event.set()
-    
+
     def stop_single_cam(self, camera: Camera) -> None:
         camera.event.clear()
- 

@@ -29,7 +29,11 @@ class Threshold:
         return SensorLevel.GOOD
 
 
-TEMPERATURE_THRESHOLD = Threshold(alert_low=15, low=20, high=22.2, alert_high=30)
-HUMIDITY_THRESHOLD = Threshold(alert_low=30, low=40, high=60, alert_high=70)
-CO2_THRESHOLD = Threshold(alert_low=None, low=None, high=1000, alert_high=1500)
-LIGHT_THRESHOLD = Threshold(alert_low=None, low=10, high=500, alert_high=None)
+TEMPERATURE_THRESHOLD = Threshold(
+    alert_low=15, low=20, high=22.2, alert_high=30)
+HUMIDITY_THRESHOLD = Threshold(
+    alert_low=30, low=40, high=60, alert_high=70)
+CO2_THRESHOLD = Threshold(
+    alert_low=None, low=None, high=1000, alert_high=1500)
+LIGHT_THRESHOLD = Threshold(
+    alert_low=None, low=10, high=500, alert_high=None)

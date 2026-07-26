@@ -2,7 +2,7 @@ import requests
 import threading
 import time
 from datetime import datetime
-from typing import Deque, Dict
+from typing import Deque, Dict, Any
 from dataclasses import dataclass
 from .custom_wrappers import reconnect
 from .custom_errors import ConnectionFailure
@@ -32,23 +32,23 @@ class SensorStream:
             print(f"Error: {e}")
             return False
         return True
-    
+
     @reconnect(max_try=5, wait_time=5)
     def _get_response(self, address: str, timeout: int) -> Dict:
         return requests.get(url=address, timeout=timeout)
-    
-    def get_latest_data(self) -> Dict:
+
+    def get_latest_data(self) -> Dict[Any, Any]:
         with self.sensor.lock:
             latest_data = self.sensor.data[-1]
         return latest_data
-    
+
     def start(self) -> None:
         self.sensor.thread = threading.Thread(
             target=self._continue_reading,
             args=(), daemon=True
         )
         self.sensor.thread.start()
-        print(f"Sensor streaming started.")
+        print("Sensor streaming started.")
 
     def _continue_reading(self) -> None:
         while not SHUTDOWN_EVENT.is_set():
@@ -60,11 +60,10 @@ class SensorStream:
                             self.sensor.data.popleft()
                         self.sensor.data.append(
                             {"time_stamp": datetime.now(),
-                            "data": response.json()})
+                             "data": response.json()})
                 else:
                     print(f"{response.text}")
             except ConnectionFailure:
                 pass
 
             time.sleep(10)
-

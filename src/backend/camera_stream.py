@@ -30,15 +30,16 @@ class CameraStream:
             self.camera.capture = cv2.VideoCapture(0)
         else:
             self.camera.capture = cv2.VideoCapture(self.camera.ip)
-        self.camera.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1) # Avoid storing frames
+        # Avoid storing frames
+        self.camera.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
         if not self.camera.capture.isOpened():
-            print("Error: Could not open the HTTP stream." \
-                "Check the IP and network connection.")
+            print("Error: Could not open the HTTP stream. "
+                  "Check the IP and network connection.")
             return False
         print(f"Connecting established to: {self.camera.ip}")
         return True
-    
+
     def start(self) -> None:
         self.camera.thread = threading.Thread(
             target=self._continue_capturing, args=(), daemon=True
