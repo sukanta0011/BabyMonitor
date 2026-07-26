@@ -121,6 +121,9 @@ class CameraStreamManager:
                     self.best_stream.detection_failure_event.clear()
             except FaceDetectionError:
                 print_message("ERROR......")
+                msg = "ERROR...."
+                self.best_stream.message.status = FaceDetectionStatus.ERROR
+                self.best_stream.message.text = msg
                 time.sleep(0.2)
 
     def get_best_camera(self, retry: int = 3) -> int:

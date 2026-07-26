@@ -87,7 +87,7 @@ def run_dashboard(
             video_placeholder.warning("Waiting for camera feed...")
 
         if message.status == FaceDetectionStatus.ERROR:
-            status_placeholder.error(message.text)
+            status_placeholder.error(message.text, icon="🚨")
         elif message.status == FaceDetectionStatus.WARNING:
             status_placeholder.warning(message.text)
         else:
@@ -103,8 +103,11 @@ def run_dashboard(
                 st.subheader("Sensor Readings")
                 bh = data.get("bh1750", {})
                 scd = data.get("scd40", {})
+                lux = bh.get("lux", "—")
                 temp = scd.get("temperature", "-")
                 humidity = scd.get("humidity", "-")
+                if isinstance(lux, float):
+                    lux = int(lux)
                 if isinstance(temp, float):
                     temp = round(temp, 1)
                 if isinstance(humidity, float):
@@ -112,7 +115,7 @@ def run_dashboard(
                 alerts = []
                 for msg in [
                     render_metric(
-                        st, "Light", bh.get("lux", "—"),
+                        st, "Light", lux,
                         "lux", LIGHT_THRESHOLD),
                     render_metric(
                         st, "CO2", scd.get("co2", "—"),
