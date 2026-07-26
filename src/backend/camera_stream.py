@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import threading
 from .face_detector import BoundingBoxSmoother
+from ..global_variables import SHUTDOWN_EVENT
 
 
 @dataclass
@@ -47,7 +48,7 @@ class CameraStream:
         print(f"'{self.camera.name}' started")
 
     def _continue_capturing(self) -> None:
-        while True:
+        while not SHUTDOWN_EVENT.is_set():
             self.camera.event.wait()
             ret, frame = self.camera.capture.read()
             if ret:

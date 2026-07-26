@@ -1,9 +1,7 @@
 import cv2
 import numpy as np
 from typing import Tuple, Callable
-import threading
-
-print_lock = threading.Lock()
+from ..global_variables import PRINT_LOCK, SHUTDOWN_EVENT
 
 def merge_image_using_padding(frames: Tuple[np.ndarray, ...]) -> np.ndarray:
     target_h = max([frame.shape[0] for frame in frames])
@@ -44,5 +42,6 @@ def merge_frames_horizontally(frames: Tuple[np.ndarray, ...],
     return final_frame
 
 def print_message(message: str):
-    with print_lock:
-        print(message)
+    if not SHUTDOWN_EVENT.is_set():
+        with PRINT_LOCK:
+            print(message)

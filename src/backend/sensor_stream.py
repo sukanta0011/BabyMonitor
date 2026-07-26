@@ -2,10 +2,11 @@ import requests
 import threading
 import time
 from datetime import datetime
-from typing import Deque, Dict, Callable
+from typing import Deque, Dict
 from dataclasses import dataclass
 from .custom_wrappers import reconnect
 from .custom_errors import ConnectionFailure
+from ..global_variables import SHUTDOWN_EVENT
 
 
 @dataclass
@@ -50,7 +51,7 @@ class SensorStream:
         print(f"Sensor streaming started.")
 
     def _continue_reading(self) -> None:
-        while True:
+        while not SHUTDOWN_EVENT.is_set():
             try:
                 response = self._get_response(self.sensor.address, 5)
                 if response.status_code != 500:
@@ -66,3 +67,4 @@ class SensorStream:
                 pass
 
             time.sleep(10)
+

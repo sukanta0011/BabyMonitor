@@ -8,4 +8,5 @@ dependencies = [
     "mediapipe>=0.10.35",
     "opencv-python>=4.13.0.92",
     "requests>=2.34.2",
+    "streamlit>=1.60.0",
 ]

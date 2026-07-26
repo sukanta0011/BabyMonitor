@@ -52,6 +52,10 @@ class FaceDetector(ABC):
     @abstractmethod
     def initialize_the_model(self) -> None:
         pass
+
+    @abstractmethod
+    def close(self) -> None:
+        pass
     
     @abstractmethod
     def extract_face_info(self) -> List[Result]:
@@ -66,6 +70,9 @@ class MediaPiperDetector(FaceDetector):
             base_options=base_options,
             running_mode=vision.RunningMode.IMAGE)
         self.detector = vision.FaceDetector.create_from_options(options)
+
+    def close(self) -> None:
+        self.detector.close()
 
     def extract_face_info(self) -> List[Result]:
         rgb_frame = cv2.cvtColor(
