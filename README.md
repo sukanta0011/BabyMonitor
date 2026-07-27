@@ -8,6 +8,8 @@ a video feed.
 embedded firmware, systems design. See [Known Limitations](#known-limitations)
 before reading anything else into what it outputs.
 
+![](https://github.com/sukanta0011/BabyMonitor/blob/main/screenshots/babymonitor_v1.gif)
+
 ---
 
 ## What it does
