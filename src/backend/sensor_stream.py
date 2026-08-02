@@ -21,6 +21,7 @@ class Sensor:
 class SensorStream:
     def __init__(self, sensor: Sensor):
         self.sensor = sensor
+        self.connected = False
 
     def is_connected(self) -> bool:
         try:
@@ -31,13 +32,19 @@ class SensorStream:
         except Exception as e:
             print(f"Error: {e}")
             return False
+        self.connected = True
         return True
 
     @reconnect(max_try=5, wait_time=5)
     def _get_response(self, address: str, timeout: int) -> Dict:
-        return requests.get(url=address, timeout=timeout)
+        response = requests.get(url=address, timeout=timeout)
+        if not response:
+            self.connected = False
+        return response
 
-    def get_latest_data(self) -> Dict[Any, Any]:
+    def get_latest_data(self) -> Dict[Any, Any] | None:
+        if not self.connected:
+            return
         with self.sensor.lock:
             latest_data = self.sensor.data[-1]
         return latest_data

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Baby Monitor</title>
+<style>
+  body { font-family: sans-serif; background: #1a1a1a; color: #eee; padding: 20px; }
+  h1 { font-size: 20px; }
+  #video { max-width: 640px; width: 100%; border-radius: 8px; border: 1px solid #444; }
+  .status { padding: 10px; border-radius: 6px; margin: 10px 0; font-weight: bold; }
+  .status.normal { background: #1e4620; color: #7fdb7f; }
+  .status.warning { background: #4a3b0d; color: #ffd166; }
+  .status.error { background: #4a1414; color: #ff6b6b; }
+  .status.unknown { background: #333; color: #999; }
+  .sensors { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-width: 640px; }
+  .sensor-box { background: #222; padding: 10px; border-radius: 6px; }
+  .sensor-box .label { font-size: 12px; color: #999; }
+  .sensor-box .value { font-size: 22px; }
+</style>
+</head>
+<body>
+
+<h1>Baby Monitor</h1>
+
+<img id="video" src="/video" alt="camera feed">
+
+<div id="status" class="status unknown">Connecting...</div>
+
+<div class="sensors">
+  <div class="sensor-box"><div class="label">Light (lux)</div><div class="value" id="light">—</div></div>
+  <div class="sensor-box"><div class="label">CO2 (ppm)</div><div class="value" id="co2">—</div></div>
+  <div class="sensor-box"><div class="label">Temperature (°C)</div><div class="value" id="temp">—</div></div>
+  <div class="sensor-box"><div class="label">Humidity (%)</div><div class="value" id="humidity">—</div></div>
+</div>
+
+<script>
+async function pollFrameInfo() {
+  try {
+    const res = await fetch("/frame_info");
+    const data = await res.json();
+    const statusEl = document.getElementById("status");
+    statusEl.className = "status " + (data.status || "unknown");
+    statusEl.textContent = `${data.name || "—"} — ${data.message || ""} (score: ${data.score ?? "—"})`;
+  } catch (e) {
+    console.error("frame_info poll failed", e);
+  }
+}
+
+async function pollSensors() {
+  try {
+    const res = await fetch("/sensors");
+    const data = await res.json();
+    const bh = data.bh1750 || {};
+    const scd = data.scd40 || {};
+    document.getElementById("light").textContent = bh.lux ?? "—";
+    document.getElementById("co2").textContent = scd.co2 ?? "—";
+    document.getElementById("temp").textContent = scd.temperature ?? "—";
+    document.getElementById("humidity").textContent = scd.humidity ?? "—";
+  } catch (e) {
+    console.error("sensors poll failed", e);
+  }
+}
+
+setInterval(pollFrameInfo, 500);
+setInterval(pollSensors, 1000);
+pollFrameInfo();
+pollSensors();
+</script>
+
+</body>
+</html>

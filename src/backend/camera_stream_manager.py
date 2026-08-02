@@ -4,6 +4,7 @@ from enum import StrEnum
 import time
 from dataclasses import dataclass, field
 import threading
+import cv2
 from ..global_variables import FACE_DETECTION_THRESHOLD, SHUTDOWN_EVENT
 from .face_detector import FaceDetector, Result
 from .custom_errors import FaceDetectionError
@@ -28,6 +29,7 @@ class BestCameraStream:
     index: int | None = None
     name: str | None = None
     frame: np.ndarray | None = None
+    encoded_frame: bytes | None = None
     result: Result | None = None
     message: Message = Message
     thread: threading.Thread | None = None
@@ -109,8 +111,15 @@ class CameraStreamManager:
                     self.best_stream.index = idx
                     self.best_stream.name = \
                         self.face_detectors[idx].stream.camera.name
-                    self.best_stream.frame = \
-                        self.face_detectors[idx].stream.camera.frame
+                    frame = self.face_detectors[idx].stream.camera.frame
+                    self.best_stream.frame = frame
+                    #  Encode the frame
+                    success, buffer= cv2.imencode(".jpg", frame)
+                    if success:
+                        self.best_stream.encoded_frame = b'--frame\r\n' +\
+                            b'Content-Type: image/jpeg\r\n\r\n' + \
+                            buffer.tobytes() + b'\r\n'
+
                     self.best_stream.result = single_result
 
     def trigger_alarm(self) -> None:

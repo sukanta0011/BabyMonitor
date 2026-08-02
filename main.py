@@ -24,6 +24,7 @@ CAMERAS = [
 SENSOR = Sensor(
     address=SENSORS, data=deque(), lock=sensor_data_lock)
 
+
 def start_streaming() -> List[CameraStream]:
     streams = [CameraStream(camera) for camera in CAMERAS]
     working_streams  = []
@@ -97,7 +98,7 @@ def start_best_camera_feed():
         cv2.destroyAllWindows()
         print("Stream closed.")
 
-from src.dashboard import run_dashboard
+from src.streamlit_dashboard import run_dashboard
 
 def start_dashboard():
     working_streams = []
