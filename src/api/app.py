@@ -2,9 +2,6 @@ from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 from typing import Dict
 import asyncio
-# from pydantic import BaseModel, Field
-import time
-import cv2
 from ..global_variables import SHUTDOWN_EVENT
 from main import start_streaming, SENSOR
 from ..backend.face_detector import MediaPiperDetector
@@ -80,7 +77,8 @@ async def get_best_viewer_info(request: Request):
     with best_frame.lock:
         frame_info = {
             "name": best_frame.name,
-            "score": round(best_frame.result.confidence_level, 2) if best_frame.result else 0.0,
+            "score": round(best_frame.result.confidence_level, 2)
+            if best_frame.result else 0.0,
             "status": best_frame.message.status,
             "message": best_frame.message.text
         }
