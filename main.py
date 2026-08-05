@@ -6,10 +6,10 @@ import threading
 from collections import deque
 from typing import List
 from src.global_variables import *
-from src.backend.helper_functions import merge_frames_horizontally, merge_image_by_resizing, print_message
+from src.backend.helper_functions import (
+    merge_frames_horizontally, print_message)
 from src.backend.camera_stream import Camera, CameraStream
 from src.backend.sensor_stream import Sensor, SensorStream
-from src.backend.camera_stream_manager import FaceDetectionStatus
 
 
 camera_data_lock = threading.Lock()

@@ -25,24 +25,27 @@ async def generate_frame(best_frame: BestCameraStream):
 
 async def lifespan(app: FastAPI):
     working_streams = start_streaming()
-    if len(working_streams) == 0:
-        return
-    face_detectors = [MediaPiperDetector(stream) for stream in working_streams]
     app.state.best_frame = BestCameraStream()
-    stream_manager = CameraStreamManager(face_detectors, app.state.best_frame)
-    stream_manager.start_camera_feed()
+    stream_manager = None
+
+    if len(working_streams) > 0:
+        face_detectors = [MediaPiperDetector(stream) for stream in working_streams]
+        stream_manager = CameraStreamManager(face_detectors, app.state.best_frame)
+        stream_manager.start_camera_feed()
+    else:
+        print("Warning: no working cameras found — starting without video")
+
     app.state.sensor_stream = SensorStream(SENSOR)
     if app.state.sensor_stream.is_connected():
         app.state.sensor_stream.start()
+
     yield
 
     SHUTDOWN_EVENT.set()
-    stream_manager.stop_camera_feed()
+    if stream_manager is not None:
+        stream_manager.stop_camera_feed()
     for stream in working_streams:
         stream.camera.capture.release()
-    for detector in face_detectors:
-        detector.close()
-    print("Stream closed.")
 
 
 app = FastAPI(
