@@ -26,6 +26,7 @@ async def generate_frame(best_frame: BestCameraStream):
 async def lifespan(app: FastAPI):
     working_streams = start_streaming()
     app.state.best_frame = BestCameraStream()
+    app.state.sensor_stream = SensorStream(SENSOR)
     stream_manager = None
 
     if len(working_streams) > 0:
@@ -35,7 +36,6 @@ async def lifespan(app: FastAPI):
     else:
         print("Warning: no working cameras found — starting without video")
 
-    app.state.sensor_stream = SensorStream(SENSOR)
     if app.state.sensor_stream.is_connected():
         app.state.sensor_stream.start()
 

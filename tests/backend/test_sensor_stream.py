@@ -6,15 +6,15 @@ from collections import deque
 
 
 class TestSensorStream:
-    sensor = Sensor(
+    fake_sensor = Sensor(
         address="http://example.local,",
         data=deque(), lock=threading.Lock())
-    stream = SensorStream(sensor)
+    fake_stream = SensorStream(fake_sensor)
 
     def test_is_connected_connection_error(self):
         with patch("src.backend.sensor_stream.requests.get") as mock_get:
             mock_get.side_effect = requests.exceptions.ConnectTimeout
-            result = self.stream.is_connected()
+            result = self.fake_stream.is_connected()
         assert result is False
 
     def test_is_connected_connection_ok(self):
@@ -22,5 +22,5 @@ class TestSensorStream:
         mock_response.status_code = 200
         with patch("src.backend.sensor_stream.requests.get") as mock_get:
             mock_get.return_value = mock_response
-            result = self.stream.is_connected()
+            result = self.fake_stream.is_connected()
         assert result is True
