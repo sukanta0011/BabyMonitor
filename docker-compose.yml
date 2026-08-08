@@ -11,7 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U baby_monitor"]
+      test: ["CMD-SHELL", "pg_isready -U baby_monitor -d baby_monitor_db"]
       interval: 5s
       timeout: 5s
       retries: 5

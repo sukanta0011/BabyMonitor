@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from typing import Dict
 import asyncio
 from ..global_variables import SHUTDOWN_EVENT
-from main import start_streaming, SENSOR
+from src.main import start_streaming, SENSOR
 from ..backend.face_detector import MediaPiperDetector
 from ..backend.camera_stream_manager import (
     CameraStreamManager, BestCameraStream)
