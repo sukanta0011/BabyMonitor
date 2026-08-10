@@ -1,5 +1,8 @@
-from sqlalchemy import DateTime, Column, Integer, Float, String, Enum
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import (
+    DateTime, Column,
+    Integer, Float,
+    String, ForeignKey)
+from sqlalchemy.orm import DeclarativeBase, relationship
 from datetime import datetime, timezone
 
 
@@ -20,5 +23,12 @@ class SensorsReadings(Base):
     light_intensity = Column(Integer)
     co2_sensor_status = Column(String, nullable=False)
     light_sensor_status = Column(String, nullable=False)
-    co2_sensor_message = Column(String)
-    light_sensor_message = Column(String)
+
+    co2_sensor_msg_id = Column(Integer, ForeignKey("error_message.id"))
+    light_sensor_msg_id = Column(Integer, ForeignKey("error_message.id"))
+
+
+class ErrorMessage(Base):
+    __tablename__ = "error_message"
+    id = Column(Integer, primary_key=True)
+    msg = Column(String(200), unique=True)

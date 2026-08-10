@@ -5,7 +5,7 @@ from ..global_variables import DATABASE_URL
 
 engine = create_async_engine(
     DATABASE_URL,
-    poolclass=NullPool) # BullPool make sure the creation of new session
+    poolclass=NullPool) # NullPool make sure the creation of new session
 async_session = async_sessionmaker(bind=engine)
 
 
