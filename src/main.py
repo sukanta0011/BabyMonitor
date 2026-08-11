@@ -19,7 +19,7 @@ sensor_data_lock = threading.Lock()
 CAMERAS = [
     Camera(ip=CAM1, name="cam1", lock=camera_data_lock, event=threading.Event()),
     # Camera(ip=CAM2, name="s3_cam1", lock=camera_data_lock, event=threading.Event()),
-    # Camera(ip="webcam", name="webcam", lock=camera_data_lock,event=threading.Event()),
+    Camera(ip="webcam", name="webcam", lock=camera_data_lock,event=threading.Event()),
 ]
 SENSOR = Sensor(
     address=SENSORS, data=deque(), lock=sensor_data_lock)

@@ -8,6 +8,8 @@ services:
       - POSTGRES_USER=baby_monitor
       - POSTGRES_PASSWORD=baby_monitor
       - POSTGRES_DB=baby_monitor_db
+    restart: unless-stopped
+    
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -18,6 +20,10 @@ services:
   
   api:
     build: .
+    devices:
+      - /dev/video0:/dev/video0
+    group_add:
+      - video
     environment:
       - DATABASE_URL=postgresql+asyncpg://baby_monitor:baby_monitor@db/baby_monitor_db
     ports:
@@ -25,6 +31,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    restart: unless-stopped
+
 
 volumes:
   postgres_data:
