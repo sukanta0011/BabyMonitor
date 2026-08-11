@@ -45,6 +45,8 @@ class SensorStream:
     def get_latest_data(self) -> Dict[Any, Any] | None:
         if not self.connected:
             return None
+        if len(self.sensor.data) == 0:
+            return None
         with self.sensor.lock:
             latest_data = self.sensor.data[-1]
         return latest_data

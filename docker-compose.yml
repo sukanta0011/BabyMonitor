@@ -3,7 +3,7 @@ services:
     image: postgres:16
     container_name: postgres_db
     ports:
-      - "5432:5432"
+      - "5434:5432"
     environment:
       - POSTGRES_USER=baby_monitor
       - POSTGRES_PASSWORD=baby_monitor

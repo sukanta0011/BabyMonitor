@@ -2,6 +2,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Dict
 from .models import SensorsReadings, ErrorMessage
+from ..global_variables import SHUTDOWN_EVENT
+from ..backend.sensor_stream import SensorStream
+import asyncio
+from .session import async_session
 
 
 class SensorDataOperations:
@@ -14,8 +18,8 @@ class SensorDataOperations:
         await self.session.refresh(data)
         return data
 
-    async def get_recent_readings(session: AsyncSession, limit: int = 100):
-        result = await session.execute(
+    async def get_recent_readings(self, limit: int = 100):
+        result = await self.session.execute(
             select(SensorsReadings)
             .order_by(SensorsReadings.time_stamp.desc())
             .limit(limit)
@@ -40,7 +44,7 @@ class ErrorMessageOperation:
         return result.scalar_one_or_none()
 
 
-class DataManager:
+class TableOperationManager:
     def __init__(self, session: AsyncSession):
         self.session = session
         self.sensor_readings = SensorDataOperations(session)
@@ -82,3 +86,18 @@ class DataManager:
             if msg_id is None:
                 msg_id = await self.error_msg.create(msg)
             setattr(reading, msg_field, msg_id)
+
+    @staticmethod
+    async def start_saving_in_db(
+            sensor_stream: SensorStream,
+            interval: int = 10) -> None:
+        while not SHUTDOWN_EVENT.is_set():
+            latest = sensor_stream.get_latest_data()
+            if latest is not None:
+                async with async_session() as session:
+                    manager = TableOperationManager(session)
+                    try:
+                        await manager.save_data(latest["data"])
+                    except Exception as e:
+                        print(f"Failed to save sensor data: {e}")
+            await asyncio.sleep(interval)
