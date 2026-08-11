@@ -2,45 +2,159 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Baby Monitor</title>
 <style>
-  body { font-family: sans-serif; background: #1a1a1a; color: #eee; padding: 20px; }
-  h1 { font-size: 20px; }
-  #video { max-width: 640px; width: 100%; border-radius: 8px; border: 1px solid #444; }
-  .status { padding: 10px; border-radius: 6px; margin: 10px 0; font-weight: bold; }
-  .status.normal { background: #1e4620; color: #7fdb7f; }
-  .status.warning { background: #4a3b0d; color: #ffd166; }
-  .status.error { background: #4a1414; color: #ff6b6b; }
-  .status.unknown { background: #333; color: #999; }
-  .sensors { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-width: 640px; }
-  .sensor-box { background: #222; padding: 10px; border-radius: 6px; }
-  .sensor-box .label { font-size: 12px; color: #999; }
-  .sensor-box .value { font-size: 22px; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #101114;
+    color: #f2f2f2;
+    margin: 0;
+    padding: env(safe-area-inset-top, 16px) 16px env(safe-area-inset-bottom, 16px);
+    max-width: 720px;
+    margin-inline: auto;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 2px 14px;
+  }
+  header h1 {
+    font-size: 19px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.2px;
+  }
+  #dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #555;
+    box-shadow: 0 0 0 4px rgba(255,255,255,0.04);
+    transition: background 0.3s;
+  }
+  #dot.normal  { background: #34d17c; box-shadow: 0 0 0 4px rgba(52,209,124,0.15); }
+  #dot.warning { background: #f5b942; box-shadow: 0 0 0 4px rgba(245,185,66,0.15); }
+  #dot.error   { background: #f0483e; box-shadow: 0 0 0 4px rgba(240,72,62,0.15); }
+
+  #video-wrap {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #000;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+  #video { display: block; width: 100%; height: auto; }
+
+  .status {
+    margin: 12px 2px 18px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.35;
+    background: #1a1c20;
+    border: 1px solid #2a2d33;
+    color: #aaa;
+  }
+  .status.normal  { background: rgba(52,209,124,0.1);  border-color: rgba(52,209,124,0.25);  color: #6fe3a4; }
+  .status.warning { background: rgba(245,185,66,0.1);  border-color: rgba(245,185,66,0.25);  color: #f5c66b; }
+  .status.error   { background: rgba(240,72,62,0.1);   border-color: rgba(240,72,62,0.25);   color: #f5847c; }
+
+  .sensors {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .sensor-box {
+    background: #1a1c20;
+    border: 1px solid #2a2d33;
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .sensor-box .label {
+    font-size: 12.5px;
+    color: #8b8d93;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .sensor-box .value {
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+  }
+  .sensor-box .unit {
+    font-size: 14px;
+    font-weight: 400;
+    color: #8b8d93;
+    margin-left: 2px;
+  }
+
+  @media (min-width: 480px) {
+    .sensor-box .value { font-size: 34px; }
+  }
+
+  footer {
+    text-align: center;
+    font-size: 11.5px;
+    color: #555;
+    margin: 18px 0 6px;
+  }
 </style>
 </head>
 <body>
 
-<h1>Baby Monitor</h1>
+<header>
+  <h1>Baby Monitor</h1>
+  <div id="dot"></div>
+</header>
 
-<img id="video" src="/video" alt="camera feed">
+<div id="video-wrap">
+  <img id="video" src="/video" alt="camera feed">
+</div>
 
-<div id="status" class="status unknown">Connecting...</div>
+<div id="status" class="status">Connecting…</div>
 
 <div class="sensors">
-  <div class="sensor-box"><div class="label">Light (lux)</div><div class="value" id="light">—</div></div>
-  <div class="sensor-box"><div class="label">CO2 (ppm)</div><div class="value" id="co2">—</div></div>
-  <div class="sensor-box"><div class="label">Temperature (°C)</div><div class="value" id="temp">—</div></div>
-  <div class="sensor-box"><div class="label">Humidity (%)</div><div class="value" id="humidity">—</div></div>
+  <div class="sensor-box">
+    <div class="label">Light</div>
+    <div class="value"><span id="light">—</span><span class="unit">lux</span></div>
+  </div>
+  <div class="sensor-box">
+    <div class="label">CO2</div>
+    <div class="value"><span id="co2">—</span><span class="unit">ppm</span></div>
+  </div>
+  <div class="sensor-box">
+    <div class="label">Temperature</div>
+    <div class="value"><span id="temp">—</span><span class="unit">°C</span></div>
+  </div>
+  <div class="sensor-box">
+    <div class="label">Humidity</div>
+    <div class="value"><span id="humidity">—</span><span class="unit">%</span></div>
+  </div>
 </div>
+
+<footer id="camera-name">—</footer>
 
 <script>
 async function pollFrameInfo() {
   try {
     const res = await fetch("/frame_info");
     const data = await res.json();
+    const status = data.status || "unknown";
     const statusEl = document.getElementById("status");
-    statusEl.className = "status " + (data.status || "unknown");
-    statusEl.textContent = `${data.name || "—"} — ${data.message || ""} (score: ${data.score ?? "—"})`;
+    statusEl.className = "status " + status;
+    statusEl.textContent = data.message || "Monitoring";
+    document.getElementById("dot").className = status;
+    document.getElementById("camera-name").textContent =
+      data.name ? `${data.name} · score ${data.score ?? "—"}` : "—";
   } catch (e) {
     console.error("frame_info poll failed", e);
   }
