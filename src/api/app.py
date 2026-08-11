@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 from ..db.table_operations import TableOperationManager
 from ..db.session import engine
 from ..db.models import Base
+from ..backend.alerts import start_sensor_alerts
 
 
 async def generate_frame(best_frame: BestCameraStream):
@@ -48,6 +49,9 @@ async def lifespan(app: FastAPI):
             TableOperationManager.start_saving_in_db(
                 app.state.sensor_stream)
             )
+        asyncio.create_task(start_sensor_alerts(
+            app.state.sensor_stream
+        ))
     yield
 
     SHUTDOWN_EVENT.set()
