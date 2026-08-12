@@ -6,4 +6,6 @@ SHUTDOWN_EVENT = threading.Event()
 PRINT_LOCK = threading.Lock()
 CAM1 = "http://192.168.1.104:81/stream"
 CAM2 = "http://192.168.1.107:81/stream"
-SENSORS = "http://esp32_sensor1.local/sensors"
+# SENSORS = "http://esp32_sensor1.local/sensors"
+SENSORS = "http://192.168.1.105/sensors"
+DATABASE_URL = "postgresql+asyncpg://baby_monitor:baby_monitor@db/baby_monitor_db"

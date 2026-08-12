@@ -3,12 +3,16 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from typing import Dict
 import asyncio
 from ..global_variables import SHUTDOWN_EVENT
-from main import start_streaming, SENSOR
+from src.main import start_streaming, SENSOR
 from ..backend.face_detector import MediaPiperDetector
 from ..backend.camera_stream_manager import (
     CameraStreamManager, BestCameraStream)
 from src.backend.sensor_stream import SensorStream
 from fastapi.responses import FileResponse
+from ..db.table_operations import TableOperationManager
+from ..db.session import engine
+from ..db.models import Base
+from ..backend.alerts import start_sensor_alerts
 
 
 async def generate_frame(best_frame: BestCameraStream):
@@ -24,6 +28,9 @@ async def generate_frame(best_frame: BestCameraStream):
 
 
 async def lifespan(app: FastAPI):
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     working_streams = start_streaming()
     app.state.best_frame = BestCameraStream()
     app.state.sensor_stream = SensorStream(SENSOR)
@@ -38,7 +45,13 @@ async def lifespan(app: FastAPI):
 
     if app.state.sensor_stream.is_connected():
         app.state.sensor_stream.start()
-
+        asyncio.create_task(
+            TableOperationManager.start_saving_in_db(
+                app.state.sensor_stream)
+            )
+        asyncio.create_task(start_sensor_alerts(
+            app.state.sensor_stream
+        ))
     yield
 
     SHUTDOWN_EVENT.set()
