@@ -45,15 +45,14 @@ async def lifespan(app: FastAPI):
     #     print("Warning: no working cameras found — starting without video")
 
     
-    if app.state.sensor_stream.is_connected():
-        app.state.sensor_stream.start()
-        asyncio.create_task(
-            TableOperationManager.start_saving_in_db(
-                app.state.sensor_stream)
-            )
-        asyncio.create_task(start_sensor_alerts(
-            app.state.sensor_stream
-        ))
+    app.state.sensor_stream.start_auto_connection_check()
+    asyncio.create_task(
+        TableOperationManager.start_saving_in_db(
+            app.state.sensor_stream)
+        )
+    asyncio.create_task(start_sensor_alerts(
+        app.state.sensor_stream
+    ))
     yield
 
     SHUTDOWN_EVENT.set()
