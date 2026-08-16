@@ -44,6 +44,7 @@ async def lifespan(app: FastAPI):
     # else:
     #     print("Warning: no working cameras found — starting without video")
 
+    
     if app.state.sensor_stream.is_connected():
         app.state.sensor_stream.start()
         asyncio.create_task(
@@ -59,7 +60,7 @@ async def lifespan(app: FastAPI):
     if stream_manager is not None:
         stream_manager.stop_camera_feed()
     for camera in CAMERAS:
-        if camera.status:
+        if camera.is_active:
             camera.capture.release()
 
 
@@ -109,3 +110,16 @@ async def get_sensor_data(request: Request):
     latest = sensor_stream.get_latest_data()
     if latest:
         return JSONResponse(content=latest.get('data'))
+
+
+@app.get("/cameras")
+async def get_cameras():
+    cams = []
+    for camera in CAMERAS:
+        with camera.lock:
+            cams.append({
+                "name": camera.name,
+                "ip": camera.ip,
+                "state": camera.is_active
+            })
+    return JSONResponse(content=cams)

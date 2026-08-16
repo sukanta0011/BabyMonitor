@@ -133,8 +133,8 @@ class CameraStreamManager:
                     self.best_stream.message.text = "Face detected"
                     self.best_stream.index = idx
                     self.best_stream.name = \
-                        self.face_detectors[idx].stream.camera.name
-                    frame = self.face_detectors[idx].stream.camera.frame
+                        self.cameras[idx].name
+                    frame = self.cameras[idx].frame
                     self.best_stream.frame = frame
                     #  Encode the frame
                     success, buffer= cv2.imencode(".jpg", frame)
