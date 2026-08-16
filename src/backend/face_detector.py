@@ -47,8 +47,8 @@ class BoundingBoxSmoother:
 
 
 class FaceDetector(ABC):
-    def __init__(self, camera_stream: CameraStream) -> None:
-        self.stream = camera_stream
+    def __init__(self, camera: Camera) -> None:
+        self.camera = camera
         self.initialize_the_model()
 
     @abstractmethod
@@ -78,8 +78,10 @@ class MediaPiperDetector(FaceDetector):
         self.detector.close()
 
     def extract_face_info(self) -> List[Result]:
+        if self.camera.frame is None:
+            return [Result(face=False)]
         rgb_frame = cv2.cvtColor(
-            self.stream.camera.frame, cv2.COLOR_BGR2RGB)
+            self.camera.frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(
             image_format=mp.ImageFormat.SRGB, data=rgb_frame)
         raw_info = self.detector.detect(mp_image)
@@ -99,7 +101,7 @@ class MediaPiperDetector(FaceDetector):
 
     def draw_detections(self) -> None:
         results = self.extract_face_info()
-        camera = self.stream.camera
+        camera = self.camera
         for result in results:
             if result.face:
                 x_c, y_c = result.face_region.origin_x, \

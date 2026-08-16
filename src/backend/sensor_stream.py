@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from .custom_wrappers import reconnect
 from .custom_errors import ConnectionFailure
 from ..global_variables import SHUTDOWN_EVENT
+from .base_class import Stream
 
 
 @dataclass
@@ -14,14 +15,14 @@ class Sensor:
     address: str
     data: Deque
     lock: threading.Lock
+    is_active: bool = False
     thread: threading.Thread | None = None
     max_size: int = 50
 
 
-class SensorStream:
+class SensorStream(Stream):
     def __init__(self, sensor: Sensor):
         self.sensor = sensor
-        self.connected = False
 
     def is_connected(self) -> bool:
         try:
@@ -32,18 +33,18 @@ class SensorStream:
         except Exception as e:
             print(f"Error: {e}")
             return False
-        self.connected = True
+        self.sensor.is_active = True
         return True
 
     @reconnect(max_try=5, wait_time=5)
     def _get_response(self, address: str, timeout: int) -> Dict:
         response = requests.get(url=address, timeout=timeout)
         if not response:
-            self.connected = False
+            self.sensor.is_active = False
         return response
 
     def get_latest_data(self) -> Dict[Any, Any] | None:
-        if not self.connected:
+        if not self.sensor.is_active:
             return None
         if len(self.sensor.data) == 0:
             return None
