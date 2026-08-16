@@ -10,7 +10,6 @@ from .face_detector import FaceDetector, Result
 from .custom_errors import FaceDetectionError
 from .camera_stream import Camera, CameraStream
 from .helper_functions import print_message
-from .face_detector import MediaPiperDetector
 
 class FaceDetectionStatus(StrEnum):
     NORMAL = "normal"
@@ -41,14 +40,16 @@ class BestCameraStream:
 class CameraStreamManager:
     def __init__(
             self, cameras: List[Camera],
+            face_detection_model: FaceDetector,
             best_stream: BestCameraStream,
             face_detection_threshold: float = FACE_DETECTION_THRESHOLD):
         self.cameras = cameras
         self.face_detection_threshold = face_detection_threshold
         self.best_stream = best_stream
+        self.fd_model = face_detection_model
 
         self.streams = [CameraStream(camera) for camera in cameras]
-        self.face_detectors = [MediaPiperDetector(camera) for camera in cameras]
+        self.face_detectors = [self.fd_model(camera) for camera in cameras]
         # self.results = [Result(face=False) for _ in cameras]
 
     def start_camera_feed(self) -> np.ndarray:

@@ -4,7 +4,7 @@ from typing import Dict
 import asyncio
 from ..global_variables import SHUTDOWN_EVENT, CAMERAS
 from src.main import start_streaming, SENSOR
-from ..backend.face_detector import MediaPiperDetector
+from ..backend.face_detector import MediaPiperDetector, YuNetDetector
 from ..backend.camera_stream_manager import (
     CameraStreamManager, BestCameraStream)
 from src.backend.sensor_stream import SensorStream
@@ -13,6 +13,9 @@ from ..db.table_operations import TableOperationManager
 from ..db.session import engine
 from ..db.models import Base
 from ..backend.alerts import start_sensor_alerts
+
+
+# FD_MODEL = YuNetDetector()
 
 
 async def generate_frame(best_frame: BestCameraStream):
@@ -36,9 +39,9 @@ async def lifespan(app: FastAPI):
     app.state.sensor_stream = SensorStream(SENSOR)
     stream_manager = None
 
-    # if len(working_streams) > 0:
-        # face_detectors = [MediaPiperDetector(stream) for stream in working_streams]
-    stream_manager = CameraStreamManager(CAMERAS, app.state.best_frame)
+
+    stream_manager = CameraStreamManager(
+        CAMERAS, YuNetDetector, app.state.best_frame)
     stream_manager.start_auto_connection_check()
     stream_manager.start_camera_feed()
     # else:

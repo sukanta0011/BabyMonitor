@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 import numpy as np
 import threading
 from .face_detector import BoundingBoxSmoother
-from ..global_variables import SHUTDOWN_EVENT
 from .base_class import Stream
 
 
@@ -20,6 +19,9 @@ class Camera:
     thread: threading.Thread | None = None
     smoother: BoundingBoxSmoother = \
         field(default_factory=lambda: BoundingBoxSmoother(1))
+
+
+from ..global_variables import SHUTDOWN_EVENT
 
 
 class CameraStream(Stream):
