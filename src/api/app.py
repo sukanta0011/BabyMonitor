@@ -3,8 +3,8 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from typing import Dict
 import asyncio
 from ..global_variables import SHUTDOWN_EVENT, CAMERAS
-from src.main import start_streaming, SENSOR
-from ..backend.face_detector import MediaPiperDetector, YuNetDetector
+from src.main import SENSOR
+from ..backend.face_detector import YuNetDetector
 from ..backend.camera_stream_manager import (
     CameraStreamManager, BestCameraStream)
 from src.backend.sensor_stream import SensorStream
@@ -26,7 +26,7 @@ async def generate_frame(best_frame: BestCameraStream):
             with best_frame.lock:
                 frame = best_frame.encoded_frame
             if frame is not None:
-                yield(frame)
+                yield frame
         await asyncio.sleep(0.1)
 
 
@@ -39,7 +39,6 @@ async def lifespan(app: FastAPI):
     app.state.sensor_stream = SensorStream(SENSOR)
     stream_manager = None
 
-
     stream_manager = CameraStreamManager(
         CAMERAS, YuNetDetector, app.state.best_frame)
     stream_manager.start_auto_connection_check()
@@ -47,7 +46,6 @@ async def lifespan(app: FastAPI):
     # else:
     #     print("Warning: no working cameras found — starting without video")
 
-    
     app.state.sensor_stream.start_auto_connection_check()
     asyncio.create_task(
         TableOperationManager.start_saving_in_db(

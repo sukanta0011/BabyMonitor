@@ -71,15 +71,18 @@ class SensorStream(Stream):
                             self.sensor.data.popleft()
                         self.sensor.data.append(
                             {"time_stamp": datetime.now(),
-                            "data": response.json()})
+                             "data": response.json()})
                 else:
                     print(f"{response.text}")
             except ConnectionFailure:
                 consecutive_failures += 1
-                print(f"Sensor read failed ({consecutive_failures}/{failure_threshold})")
+                print("Sensor read failed ("
+                      f"{consecutive_failures}/{failure_threshold})")
                 if consecutive_failures >= failure_threshold:
                     self.sensor.is_active = False
-                    print("Sensor considered offline — waiting for rediscovery")
+                    print(
+                        "Sensor considered offline — "
+                        "waiting for rediscovery")
                     return
 
             time.sleep(10)
@@ -94,8 +97,10 @@ class SensorStream(Stream):
     def _run_connection_checking_loop(self, interval: int) -> None:
         while not SHUTDOWN_EVENT.is_set():
             if not self.sensor.is_active:
-                print(f"Attempting to reconnect sensor at {self.sensor.address}...")
+                print("Attempting to reconnect sensor at "
+                      f"{self.sensor.address}...")
                 if self.is_connected():
-                    print(f"Sensor at {self.sensor.address} reconnected — restarting stream")
+                    print(f"Sensor at {self.sensor.address} "
+                          "reconnected — restarting stream")
                     self.start()
             time.sleep(interval)

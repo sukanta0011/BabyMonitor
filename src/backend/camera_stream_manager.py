@@ -11,6 +11,7 @@ from .custom_errors import FaceDetectionError
 from .camera_stream import Camera, CameraStream
 from .helper_functions import print_message
 
+
 class FaceDetectionStatus(StrEnum):
     NORMAL = "normal"
     WARNING = "warning"
@@ -138,7 +139,7 @@ class CameraStreamManager:
                     frame = self.cameras[idx].frame
                     self.best_stream.frame = frame
                     #  Encode the frame
-                    success, buffer= cv2.imencode(".jpg", frame)
+                    success, buffer = cv2.imencode(".jpg", frame)
                     if success:
                         self.best_stream.encoded_frame = b'--frame\r\n' +\
                             b'Content-Type: image/jpeg\r\n\r\n' + \

@@ -1,27 +1,24 @@
 import cv2
-from dataclasses import dataclass
-import numpy as np
 import time
-import threading
-from collections import deque
 from typing import List
-from src.global_variables import *
 from src.backend.helper_functions import (
     merge_frames_horizontally, print_message)
 from src.backend.camera_stream import CameraStream
 from src.backend.sensor_stream import SensorStream
-from .global_variables import CAMERAS, SENSOR
+from .global_variables import (
+    CAMERAS, SENSOR, camera_data_lock, SHUTDOWN_EVENT)
+from .backend.helper_functions import merge_image_by_resizing
 
 
 def start_streaming() -> List[CameraStream]:
     streams = [CameraStream(camera) for camera in CAMERAS]
-    working_streams  = []
+    working_streams = []
     for stream in streams:
         if stream.is_connected():
             stream.start()
             working_streams.append(stream)
     if len(working_streams) == 0:
-        print(f"There no active cameras at this moment")
+        print("There no active cameras at this moment")
     return working_streams
 
 
@@ -51,7 +48,9 @@ def start_all_camera_feed():
 
 
 from src.backend.face_detector import MediaPiperDetector
-from src.backend.camera_stream_manager import CameraStreamManager, BestCameraStream
+from src.backend.camera_stream_manager import (
+    CameraStreamManager, BestCameraStream)
+
 
 def start_best_camera_feed():
     working_streams = start_streaming()
@@ -86,7 +85,9 @@ def start_best_camera_feed():
         cv2.destroyAllWindows()
         print("Stream closed.")
 
+
 from src.streamlit_dashboard import run_dashboard
+
 
 def start_dashboard():
     working_streams = []
@@ -96,7 +97,8 @@ def start_dashboard():
         working_streams = start_streaming()
         if len(working_streams) == 0:
             return
-        face_detectors = [MediaPiperDetector(stream) for stream in working_streams]
+        face_detectors = [
+            MediaPiperDetector(stream) for stream in working_streams]
         best_stream = BestCameraStream()
         stream_manager = CameraStreamManager(face_detectors, best_stream)
 

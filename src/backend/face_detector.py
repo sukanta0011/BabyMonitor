@@ -62,7 +62,6 @@ class FaceDetector(ABC):
 
 class MediaPiperDetector(FaceDetector):
     def initialize_the_model(self) -> None:
-        # import mediapipe as mp
         from mediapipe.tasks import python
         from mediapipe.tasks.python import vision
 
@@ -78,6 +77,7 @@ class MediaPiperDetector(FaceDetector):
         self.detector.close()
 
     def extract_face_info(self) -> List[Result]:
+        import mediapipe as mp
         if self.camera.frame is None:
             return [Result(face=False)]
         rgb_frame = cv2.cvtColor(

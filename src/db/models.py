@@ -2,7 +2,7 @@ from sqlalchemy import (
     DateTime, Column,
     Integer, Float,
     String, ForeignKey)
-from sqlalchemy.orm import DeclarativeBase, relationship
+from sqlalchemy.orm import DeclarativeBase
 from datetime import datetime, timezone
 
 

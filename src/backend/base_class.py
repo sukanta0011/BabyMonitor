@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
-class Stream:
+
+class Stream(ABC):
     @abstractmethod
     def is_connected(self) -> bool:
         pass
