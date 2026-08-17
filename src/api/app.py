@@ -2,9 +2,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 from typing import Dict
 import asyncio
-from ..global_variables import SHUTDOWN_EVENT
+from ..global_variables import SHUTDOWN_EVENT, CAMERAS
 from src.main import start_streaming, SENSOR
-from ..backend.face_detector import MediaPiperDetector
+from ..backend.face_detector import MediaPiperDetector, YuNetDetector
 from ..backend.camera_stream_manager import (
     CameraStreamManager, BestCameraStream)
 from src.backend.sensor_stream import SensorStream
@@ -13,6 +13,9 @@ from ..db.table_operations import TableOperationManager
 from ..db.session import engine
 from ..db.models import Base
 from ..backend.alerts import start_sensor_alerts
+
+
+# FD_MODEL = YuNetDetector()
 
 
 async def generate_frame(best_frame: BestCameraStream):
@@ -31,34 +34,36 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    working_streams = start_streaming()
+    # working_streams = start_streaming()
     app.state.best_frame = BestCameraStream()
     app.state.sensor_stream = SensorStream(SENSOR)
     stream_manager = None
 
-    if len(working_streams) > 0:
-        face_detectors = [MediaPiperDetector(stream) for stream in working_streams]
-        stream_manager = CameraStreamManager(face_detectors, app.state.best_frame)
-        stream_manager.start_camera_feed()
-    else:
-        print("Warning: no working cameras found — starting without video")
 
-    if app.state.sensor_stream.is_connected():
-        app.state.sensor_stream.start()
-        asyncio.create_task(
-            TableOperationManager.start_saving_in_db(
-                app.state.sensor_stream)
-            )
-        asyncio.create_task(start_sensor_alerts(
-            app.state.sensor_stream
-        ))
+    stream_manager = CameraStreamManager(
+        CAMERAS, YuNetDetector, app.state.best_frame)
+    stream_manager.start_auto_connection_check()
+    stream_manager.start_camera_feed()
+    # else:
+    #     print("Warning: no working cameras found — starting without video")
+
+    
+    app.state.sensor_stream.start_auto_connection_check()
+    asyncio.create_task(
+        TableOperationManager.start_saving_in_db(
+            app.state.sensor_stream)
+        )
+    asyncio.create_task(start_sensor_alerts(
+        app.state.sensor_stream
+    ))
     yield
 
     SHUTDOWN_EVENT.set()
     if stream_manager is not None:
         stream_manager.stop_camera_feed()
-    for stream in working_streams:
-        stream.camera.capture.release()
+    for camera in CAMERAS:
+        if camera.is_active:
+            camera.capture.release()
 
 
 app = FastAPI(
@@ -107,3 +112,16 @@ async def get_sensor_data(request: Request):
     latest = sensor_stream.get_latest_data()
     if latest:
         return JSONResponse(content=latest.get('data'))
+
+
+@app.get("/cameras")
+async def get_cameras():
+    cams = []
+    for camera in CAMERAS:
+        with camera.lock:
+            cams.append({
+                "name": camera.name,
+                "ip": camera.ip,
+                "state": camera.is_active
+            })
+    return JSONResponse(content=cams)

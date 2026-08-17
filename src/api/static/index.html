@@ -40,6 +40,45 @@
   #dot.warning { background: #f5b942; box-shadow: 0 0 0 4px rgba(245,185,66,0.15); }
   #dot.error   { background: #f0483e; box-shadow: 0 0 0 4px rgba(240,72,62,0.15); }
 
+  .camera-pills {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 2px 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pill {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex: none;
+    background: #1a1c20;
+    border: 1px solid #2a2d33;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #aaa;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .pill.active {
+    border-color: #4a90d9;
+    color: #cfe4fb;
+    background: rgba(74,144,217,0.1);
+  }
+  .pill.disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+  .pill-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #555;
+    flex: none;
+  }
+  .pill-dot.on  { background: #34d17c; }
+  .pill-dot.off { background: #f0483e; }
+
   #video-wrap {
     position: relative;
     border-radius: 16px;
@@ -116,6 +155,13 @@
   <div id="dot"></div>
 </header>
 
+<div class="camera-pills" id="camera-pills">
+  <div class="pill active" id="pill-best">
+    <span class="pill-dot on"></span>
+    Best stream
+  </div>
+</div>
+
 <div id="video-wrap">
   <img id="video" src="/video" alt="camera feed">
 </div>
@@ -166,19 +212,51 @@ async function pollSensors() {
     const data = await res.json();
     const bh = data.bh1750 || {};
     const scd = data.scd40 || {};
-    document.getElementById("light").textContent = bh.lux ?? "—";
-    document.getElementById("co2").textContent = scd.co2 ?? "—";
-    document.getElementById("temp").textContent = scd.temperature ?? "—";
-    document.getElementById("humidity").textContent = scd.humidity ?? "—";
+    document.getElementById("light").textContent =
+      bh.lux != null ? bh.lux.toFixed(1) : "—";
+    document.getElementById("co2").textContent =
+      scd.co2 != null ? Math.round(scd.co2) : "—";
+    document.getElementById("temp").textContent =
+      scd.temperature != null ? scd.temperature.toFixed(1) : "—";
+    document.getElementById("humidity").textContent =
+      scd.humidity != null ? scd.humidity.toFixed(1) : "—";
   } catch (e) {
     console.error("sensors poll failed", e);
   }
 }
 
+async function pollCameras() {
+  try {
+    const res = await fetch("/cameras");
+    const cameras = await res.json();
+    const container = document.getElementById("camera-pills");
+
+    // remove old camera pills (keep the "Best stream" pill, index 0)
+    while (container.children.length > 1) {
+      container.removeChild(container.lastChild);
+    }
+
+    cameras.forEach(cam => {
+      const pill = document.createElement("div");
+      pill.className = "pill disabled";
+      pill.title = "Per-camera view coming soon — showing best stream only";
+      pill.innerHTML = `
+        <span class="pill-dot ${cam.state ? 'on' : 'off'}"></span>
+        ${cam.name}
+      `;
+      container.appendChild(pill);
+    });
+  } catch (e) {
+    console.error("cameras poll failed", e);
+  }
+}
+
 setInterval(pollFrameInfo, 500);
 setInterval(pollSensors, 1000);
+setInterval(pollCameras, 3000);
 pollFrameInfo();
 pollSensors();
+pollCameras();
 </script>
 
 </body>

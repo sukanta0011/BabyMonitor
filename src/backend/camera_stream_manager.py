@@ -8,9 +8,8 @@ import cv2
 from ..global_variables import FACE_DETECTION_THRESHOLD, SHUTDOWN_EVENT
 from .face_detector import FaceDetector, Result
 from .custom_errors import FaceDetectionError
-from .camera_stream import Camera
+from .camera_stream import Camera, CameraStream
 from .helper_functions import print_message
-
 
 class FaceDetectionStatus(StrEnum):
     NORMAL = "normal"
@@ -40,12 +39,18 @@ class BestCameraStream:
 
 class CameraStreamManager:
     def __init__(
-            self, face_detectors: List[FaceDetector],
+            self, cameras: List[Camera],
+            face_detection_model: FaceDetector,
             best_stream: BestCameraStream,
             face_detection_threshold: float = FACE_DETECTION_THRESHOLD):
-        self.face_detectors = face_detectors
+        self.cameras = cameras
         self.face_detection_threshold = face_detection_threshold
         self.best_stream = best_stream
+        self.fd_model = face_detection_model
+
+        self.streams = [CameraStream(camera) for camera in cameras]
+        self.face_detectors = [self.fd_model(camera) for camera in cameras]
+        # self.results = [Result(face=False) for _ in cameras]
 
     def start_camera_feed(self) -> np.ndarray:
         self.best_stream.thread = threading.Thread(
@@ -55,6 +60,25 @@ class CameraStreamManager:
     def stop_camera_feed(self, timeout: float = 5) -> None:
         if self.best_stream.thread is not None:
             self.best_stream.thread.join(timeout)
+
+    def start_auto_connection_check(self) -> None:
+        self.active_cameras = []
+        self.connection_checking_thread = threading.Thread(
+            target=self._run_connection_checking_loop,
+            args=(), daemon=True
+        )
+        self.connection_checking_thread.start()
+
+    def _run_connection_checking_loop(self) -> None:
+        while not SHUTDOWN_EVENT.is_set():
+            for stream in self.streams:
+                with stream.camera.lock:
+                    if stream.camera.is_active:
+                        continue
+                if stream.is_connected():
+                    print(f"New camera is detected at ip :{stream.camera.ip}")
+                    stream.start()
+            time.sleep(60)
 
     def _run_detection_loop(self) -> None:
         idx = self.best_stream.index
@@ -69,7 +93,7 @@ class CameraStreamManager:
                     # self.stop_all_cam()
                     # self.start_single_cam(
                     #     self.face_detectors[idx].stream.camera)
-                self._wait_for_frame_detection(self.face_detectors[idx])
+                self._wait_for_frame_detection(self.cameras[idx])
                 if not SHUTDOWN_EVENT.is_set():
                     result: Result = \
                         self.face_detectors[idx].extract_face_info()
@@ -110,8 +134,8 @@ class CameraStreamManager:
                     self.best_stream.message.text = "Face detected"
                     self.best_stream.index = idx
                     self.best_stream.name = \
-                        self.face_detectors[idx].stream.camera.name
-                    frame = self.face_detectors[idx].stream.camera.frame
+                        self.cameras[idx].name
+                    frame = self.cameras[idx].frame
                     self.best_stream.frame = frame
                     #  Encode the frame
                     success, buffer= cv2.imencode(".jpg", frame)
@@ -140,12 +164,12 @@ class CameraStreamManager:
         best_camera_index = None
         while (attempts < retry and not SHUTDOWN_EVENT.is_set()):
             results: List[Result] = []
-            for detector in self.face_detectors:
-                self._wait_for_frame_detection(detector)
-                faces = detector.extract_face_info()
+            for idx, fd in enumerate(self.face_detectors):
+                self._wait_for_frame_detection(self.cameras[idx])
+                faces = fd.extract_face_info()
                 if len(faces) > 0:
                     print_message(
-                        f"best camera name: {detector.stream.camera.name}")
+                        f"best camera name: {self.cameras[idx].name}")
                     print_message(faces)
                     results.append(faces[0])
                 else:
@@ -164,19 +188,26 @@ class CameraStreamManager:
         raise FaceDetectionError("Unable to detect face by any camera")
 
     def _wait_for_frame_detection(
-            self, detector: FaceDetector,
+            self, camera: Camera,
             timeout: int = 2) -> None:
         wait_time = 0.0
-        while (detector.stream.camera.frame is None and
-                not SHUTDOWN_EVENT.is_set()):
+        with camera.lock:
+            is_active = camera.is_active
+        if not is_active:
+            return
+        while SHUTDOWN_EVENT.is_set():
+            with camera.lock:
+                frame = camera.frame
+            if frame is not None:
+                return
             if wait_time < timeout:
-                print_message(f"Waiting for {detector.stream.camera.name}")
+                print_message(f"Waiting for {camera.name}")
                 time.sleep(0.1)
                 wait_time += 0.1
             else:
                 print_message(
                     "Unable to get camera feed from "
-                    f"'{detector.stream.camera.name}'"
+                    f"'{camera.name}'"
                 )
                 self.get_best_camera()
 
@@ -196,7 +227,7 @@ class CameraStreamManager:
                 return cam_idx
             else:
                 msg = "Face detection quality decreased for " +\
-                      f"{self.face_detectors[cam_idx].stream.camera.name}. " +\
+                      f"{self.cameras[cam_idx].name}. " +\
                       f"Attempt {attempts + 1}/{retry}."
                 self.best_stream.message.status = FaceDetectionStatus.WARNING
                 self.best_stream.message.text = msg
@@ -205,16 +236,16 @@ class CameraStreamManager:
             time.sleep(1)
         return self.get_best_camera()
 
-    def start_all_cam(self) -> None:
-        for face_detector in self.face_detectors:
-            self.start_single_cam(face_detector.stream.camera)
+    # def start_all_cam(self) -> None:
+    #     for face_detector in self.face_detectors:
+    #         self.start_single_cam(face_detector.stream.camera)
 
-    def stop_all_cam(self) -> None:
-        for face_detector in self.face_detectors:
-            self.stop_single_cam(face_detector.stream.camera)
+    # def stop_all_cam(self) -> None:
+    #     for face_detector in self.face_detectors:
+    #         self.stop_single_cam(face_detector.stream.camera)
 
-    def start_single_cam(self, camera: Camera) -> None:
-        camera.event.set()
+    # def start_single_cam(self, camera: Camera) -> None:
+    #     camera.event.set()
 
-    def stop_single_cam(self, camera: Camera) -> None:
-        camera.event.clear()
+    # def stop_single_cam(self, camera: Camera) -> None:
+    #     camera.event.clear()

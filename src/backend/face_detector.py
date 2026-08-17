@@ -1,16 +1,12 @@
 from __future__ import annotations
 import numpy as np
-import mediapipe as mp
 from typing import List, Tuple, TYPE_CHECKING, Deque, Any
 from abc import ABC, abstractmethod
-import time
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
 from collections import deque
 import cv2
 from dataclasses import dataclass
 if TYPE_CHECKING:
-    from .camera_stream import CameraStream
+    from .camera_stream import Camera
 
 
 @dataclass
@@ -47,8 +43,8 @@ class BoundingBoxSmoother:
 
 
 class FaceDetector(ABC):
-    def __init__(self, camera_stream: CameraStream) -> None:
-        self.stream = camera_stream
+    def __init__(self, camera: Camera) -> None:
+        self.camera = camera
         self.initialize_the_model()
 
     @abstractmethod
@@ -66,6 +62,10 @@ class FaceDetector(ABC):
 
 class MediaPiperDetector(FaceDetector):
     def initialize_the_model(self) -> None:
+        # import mediapipe as mp
+        from mediapipe.tasks import python
+        from mediapipe.tasks.python import vision
+
         base_options = python.BaseOptions(
             model_asset_path='face_detection_models/' +
             'blaze_face_full_range.tflite')
@@ -78,8 +78,10 @@ class MediaPiperDetector(FaceDetector):
         self.detector.close()
 
     def extract_face_info(self) -> List[Result]:
+        if self.camera.frame is None:
+            return [Result(face=False)]
         rgb_frame = cv2.cvtColor(
-            self.stream.camera.frame, cv2.COLOR_BGR2RGB)
+            self.camera.frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(
             image_format=mp.ImageFormat.SRGB, data=rgb_frame)
         raw_info = self.detector.detect(mp_image)
@@ -99,7 +101,7 @@ class MediaPiperDetector(FaceDetector):
 
     def draw_detections(self) -> None:
         results = self.extract_face_info()
-        camera = self.stream.camera
+        camera = self.camera
         for result in results:
             if result.face:
                 x_c, y_c = result.face_region.origin_x, \
@@ -121,28 +123,43 @@ class MediaPiperDetector(FaceDetector):
                 #         2, (255, 0, 0), 1)
 
 
+class YuNetDetector(FaceDetector):
+    def initialize_the_model(self) -> None:
+        self.detector = cv2.FaceDetectorYN.create(
+            model='face_detection_models/face_detection_yunet_2023mar.onnx',
+            config='',
+            input_size=(320, 320),
+            score_threshold=0.6,
+            nms_threshold=0.3,
+            top_k=5000
+        )
+
+    def close(self) -> None:
+        pass
+
+    def extract_face_info(self) -> List[Result]:
+        if self.camera.frame is None:
+            return [Result(face=False)]
+
+        frame = self.camera.frame
+        h, w = frame.shape[:2]
+        self.detector.setInputSize((w, h))
+
+        _, faces = self.detector.detect(frame)
+        if faces is None:
+            return [Result(face=False)]
+
+        results: List[Result] = []
+        for face in faces:
+            x, y, box_w, box_h = face[0:4].astype(int)
+            confidence = float(face[14])
+            results.append(Result(
+                face=True,
+                face_region=(x, y, box_w, box_h),
+                confidence_level=confidence,
+            ))
+        return results
+
+
 if __name__ == "__main__":
-    from .camera_stream import Camera
-    import threading
-
-    test_lock = threading.Lock()
-
-    camera = Camera(ip="webcam", name="camera2", lock=test_lock)
-    stream = CameraStream(camera)
-    media_pipe = MediaPiperDetector(stream)
-    if stream.is_connected():
-        stream.start()
-
-    while True:
-        frame = stream.camera.frame
-        if frame is not None and frame.size > 0:
-            results = media_pipe.extract_face_info()
-            media_pipe.draw_detections()
-            cv2.imshow("Webcam", frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-        time.sleep(0.05)
-
-    stream.camera.capture.release()
-    cv2.destroyAllWindows()
-    print("Stream closed.")
+    pass

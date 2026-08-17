@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import threading
 from .face_detector import BoundingBoxSmoother
-from ..global_variables import SHUTDOWN_EVENT
+from .base_class import Stream
 
 
 @dataclass
@@ -12,6 +12,7 @@ class Camera:
     name: str
     lock: threading.Lock
     event: threading.Event
+    is_active: bool = False  # False == off, True == on
     capture: cv2.VideoCapture | None = None
     ret: int | None = None
     frame: np.ndarray | None = None
@@ -20,7 +21,10 @@ class Camera:
         field(default_factory=lambda: BoundingBoxSmoother(1))
 
 
-class CameraStream:
+from ..global_variables import SHUTDOWN_EVENT
+
+
+class CameraStream(Stream):
     def __init__(self, camera: Camera) -> None:
         self.camera = camera
 
@@ -38,6 +42,7 @@ class CameraStream:
                   "Check the IP and network connection.")
             return False
         print(f"Connecting established to: {self.camera.ip}")
+        self.camera.is_active = True
         return True
 
     def start(self) -> None:
@@ -49,12 +54,23 @@ class CameraStream:
         print(f"'{self.camera.name}' started")
 
     def _continue_capturing(self) -> None:
+        consecutive_failures = 0
+        failure_threshold = 5
         while not SHUTDOWN_EVENT.is_set():
             self.camera.event.wait()
             ret, frame = self.camera.capture.read()
             if ret:
+                consecutive_failures = 0
                 with self.camera.lock:
                     self.camera.frame = frame
+            else:
+                consecutive_failures += 1
+                if consecutive_failures >= failure_threshold:
+                    with self.camera.lock:
+                        self.camera.is_active = False
+                        self.camera.frame = None
+                    print(f"'{self.camera.name}' connection lost")
+                    return
 
 
 if __name__ == "__main__":
