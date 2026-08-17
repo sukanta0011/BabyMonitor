@@ -212,10 +212,14 @@ async function pollSensors() {
     const data = await res.json();
     const bh = data.bh1750 || {};
     const scd = data.scd40 || {};
-    document.getElementById("light").textContent = bh.lux ?? "—";
-    document.getElementById("co2").textContent = scd.co2 ?? "—";
-    document.getElementById("temp").textContent = scd.temperature ?? "—";
-    document.getElementById("humidity").textContent = scd.humidity ?? "—";
+    document.getElementById("light").textContent =
+      bh.lux != null ? bh.lux.toFixed(1) : "—";
+    document.getElementById("co2").textContent =
+      scd.co2 != null ? Math.round(scd.co2) : "—";
+    document.getElementById("temp").textContent =
+      scd.temperature != null ? scd.temperature.toFixed(1) : "—";
+    document.getElementById("humidity").textContent =
+      scd.humidity != null ? scd.humidity.toFixed(1) : "—";
   } catch (e) {
     console.error("sensors poll failed", e);
   }
