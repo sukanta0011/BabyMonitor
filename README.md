@@ -10,7 +10,7 @@ embedded firmware, systems design. See [Known Limitations](#known-limitations).
 ![](https://github.com/sukanta0011/BabyMonitor/blob/main/screenshots/babymonitor_v1.gif)
 
 For the full story — why things are built this way, bugs hit and how they
-were diagnosed, load-testing numbers — see [DEVELOPMENT.md](DEVELOPMENT.md).
+were diagnosed, load-testing numbers — see [development_journery.md](development_journey.md).
 
 ---
 
