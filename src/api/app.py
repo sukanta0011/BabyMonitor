@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, JSONResponse
+import cv2
 from typing import Dict
 import asyncio
 from ..global_variables import SHUTDOWN_EVENT, CAMERAS
@@ -7,6 +8,7 @@ from src.main import SENSOR
 from ..backend.face_detector import YuNetDetector
 from ..backend.camera_stream_manager import (
     CameraStreamManager, BestCameraStream)
+from ..backend.camera_stream import Camera
 from src.backend.sensor_stream import SensorStream
 from fastapi.responses import FileResponse
 from ..db.table_operations import TableOperationManager
@@ -15,10 +17,7 @@ from ..db.models import Base
 from ..backend.alerts import start_sensor_alerts
 
 
-# FD_MODEL = YuNetDetector()
-
-
-async def generate_frame(best_frame: BestCameraStream):
+async def generate_best_frame(best_frame: BestCameraStream):
     while not SHUTDOWN_EVENT.is_set():
         with best_frame.lock:
             index = best_frame.index
@@ -27,6 +26,19 @@ async def generate_frame(best_frame: BestCameraStream):
                 frame = best_frame.encoded_frame
             if frame is not None:
                 yield frame
+        await asyncio.sleep(0.1)
+
+
+async def generate_camera_frame(camera: Camera):
+    while not SHUTDOWN_EVENT.is_set():
+        with camera.lock:
+            frame = camera.frame
+        if frame is not None:
+            success, buffer = cv2.imencode(".jpg", frame)
+            if success:
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' +
+                       buffer.tobytes() + b'\r\n')
         await asyncio.sleep(0.1)
 
 
@@ -85,7 +97,7 @@ async def health_check() -> Dict:
 async def get_best_view(request: Request) -> StreamingResponse:
     best_frame = request.app.state.best_frame
     return StreamingResponse(
-        generate_frame(best_frame),
+        generate_best_frame(best_frame),
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
 
@@ -123,3 +135,16 @@ async def get_cameras():
                 "state": camera.is_active
             })
     return JSONResponse(content=cams)
+
+
+@app.get("/video/{camera_name}")
+async def get_camera_view(camera_name: str):
+    camera = next(
+        (c for c in CAMERAS if c.name == camera_name), None)
+    if camera is None:
+        return JSONResponse(
+            status_code=404, content={"error": "camera not found"})
+    return StreamingResponse(
+        generate_camera_frame(camera),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )

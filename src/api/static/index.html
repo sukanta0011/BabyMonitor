@@ -60,7 +60,7 @@
     font-weight: 500;
     color: #aaa;
     cursor: pointer;
-    transition: border-color 0.2s, color 0.2s;
+    transition: border-color 0.2s, color 0.2s, opacity 0.2s;
   }
   .pill.active {
     border-color: #4a90d9;
@@ -69,7 +69,7 @@
   }
   .pill.disabled {
     cursor: not-allowed;
-    opacity: 0.7;
+    opacity: 0.5;
   }
   .pill-dot {
     width: 7px; height: 7px; border-radius: 50%;
@@ -156,7 +156,7 @@
 </header>
 
 <div class="camera-pills" id="camera-pills">
-  <div class="pill active" id="pill-best">
+  <div class="pill active" id="pill-best" data-target="/video">
     <span class="pill-dot on"></span>
     Best stream
   </div>
@@ -190,6 +190,23 @@
 <footer id="camera-name">—</footer>
 
 <script>
+// Tracks which video source is currently selected — "best" or a camera name.
+// Kept outside the DOM so pill rebuilds (pollCameras) never lose the selection.
+let selectedTarget = "best";
+
+function selectStream(target, videoSrc) {
+  selectedTarget = target;
+  document.getElementById("video").src = videoSrc;
+  applyActivePillState();
+}
+
+function applyActivePillState() {
+  document.querySelectorAll(".pill").forEach(pill => {
+    const isActive = pill.dataset.key === selectedTarget;
+    pill.classList.toggle("active", isActive);
+  });
+}
+
 async function pollFrameInfo() {
   try {
     const res = await fetch("/frame_info");
@@ -231,21 +248,42 @@ async function pollCameras() {
     const cameras = await res.json();
     const container = document.getElementById("camera-pills");
 
-    // remove old camera pills (keep the "Best stream" pill, index 0)
+    // "Best stream" pill (index 0) is permanent — tag it once, then rebuild
+    // only the per-camera pills after it on every poll.
+    const bestPill = document.getElementById("pill-best");
+    bestPill.dataset.key = "best";
+    if (!bestPill.dataset.wired) {
+      bestPill.addEventListener("click", () => selectStream("best", "/video"));
+      bestPill.dataset.wired = "true";
+    }
+
     while (container.children.length > 1) {
       container.removeChild(container.lastChild);
     }
 
     cameras.forEach(cam => {
       const pill = document.createElement("div");
-      pill.className = "pill disabled";
-      pill.title = "Per-camera view coming soon — showing best stream only";
+      const online = !!cam.state;
+      pill.className = "pill" + (online ? "" : " disabled");
+      pill.dataset.key = cam.name;
       pill.innerHTML = `
-        <span class="pill-dot ${cam.state ? 'on' : 'off'}"></span>
+        <span class="pill-dot ${online ? 'on' : 'off'}"></span>
         ${cam.name}
       `;
+      if (online) {
+        pill.addEventListener("click", () =>
+          selectStream(cam.name, `/video/${encodeURIComponent(cam.name)}`));
+      } else {
+        pill.title = "Camera offline";
+        // if the currently-selected camera just went offline, fall back to Best
+        if (selectedTarget === cam.name) {
+          selectStream("best", "/video");
+        }
+      }
       container.appendChild(pill);
     });
+
+    applyActivePillState();
   } catch (e) {
     console.error("cameras poll failed", e);
   }
