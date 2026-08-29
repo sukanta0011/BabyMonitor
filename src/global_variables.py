@@ -24,10 +24,10 @@ CAMERAS = [
         ip=CAM1, name="cam1",
         lock=camera_data_lock,
         event=threading.Event()),
-    Camera(
-        ip="webcam", name="webcam",
-        lock=camera_data_lock,
-        event=threading.Event()),
+    # Camera(
+    #     ip="webcam", name="webcam",
+    #     lock=camera_data_lock,
+    #     event=threading.Event()),
 ]
 
 from src.backend.sensor_stream import Sensor

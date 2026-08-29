@@ -3,6 +3,10 @@ import requests
 import time
 from typing import Callable
 from .custom_errors import ConnectionFailure
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 def reconnect(max_try: int, wait_time: int) -> Callable:
@@ -14,7 +18,7 @@ def reconnect(max_try: int, wait_time: int) -> Callable:
                     return func(*args, **kwargs)
                 except requests.exceptions.ConnectTimeout:
                     time.sleep(wait_time)
-                    print(
+                    logger.warning(
                         "Sensor stream is unreachable. "
                         f"Reconnecting {i}/{max_try}...")
             raise ConnectionFailure(

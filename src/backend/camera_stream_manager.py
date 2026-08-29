@@ -1,4 +1,5 @@
 from typing import List
+import logging
 import numpy as np
 from enum import StrEnum
 import time
@@ -10,6 +11,9 @@ from .face_detector import FaceDetector, Result
 from .custom_errors import FaceDetectionError
 from .camera_stream import Camera, CameraStream
 from .helper_functions import print_message
+
+
+logger = logging.getLogger(__name__)
 
 
 class FaceDetectionStatus(StrEnum):
@@ -77,7 +81,7 @@ class CameraStreamManager:
                     if stream.camera.is_active:
                         continue
                 if stream.is_connected():
-                    print(f"New camera is detected at ip :{stream.camera.ip}")
+                    logger.info(f"New camera is detected at ip :{stream.camera.ip}")
                     stream.start()
             time.sleep(60)
 
@@ -106,19 +110,19 @@ class CameraStreamManager:
                             single_result.confidence_level <
                             self.face_detection_threshold) and \
                             not SHUTDOWN_EVENT.is_set():
-                        print_message(
+                        logger.warning(
                             "Face quality falls below threshold, trying again")
                         idx = self.retry_face_detection(idx)
                     time_since_detection_failed = time.time()
                     time.sleep(sleep_time)
             except FaceDetectionError as e:
-                print_message(e)
+                logger.error(e)
                 if (time.time() - time_since_detection_failed) > time_out:
                     msg = "Warning: face detection failure"
                     self.best_stream.message.status = \
                         FaceDetectionStatus.WARNING
                     self.best_stream.message.text = msg
-                    print_message(msg)
+                    logger.error(msg)
                     self.best_stream.detection_failure_event.set()
                     self.trigger_alarm()
 
@@ -126,7 +130,7 @@ class CameraStreamManager:
                       f"{time.time() - time_since_detection_failed}s"
                 self.best_stream.message.status = FaceDetectionStatus.ERROR
                 self.best_stream.message.text = msg
-                print_message(msg)
+                logger.warning(msg)
 
             if idx is not None and not SHUTDOWN_EVENT.is_set():
                 with self.best_stream.lock:
@@ -154,7 +158,7 @@ class CameraStreamManager:
                 if self.get_best_camera(retry=1) is not None:
                     self.best_stream.detection_failure_event.clear()
             except FaceDetectionError:
-                print_message("ERROR......")
+                logger.error("ERROR......")
                 msg = "ERROR...."
                 self.best_stream.message.status = FaceDetectionStatus.ERROR
                 self.best_stream.message.text = msg
@@ -169,9 +173,9 @@ class CameraStreamManager:
                 self._wait_for_frame_detection(self.cameras[idx])
                 faces = fd.extract_face_info()
                 if len(faces) > 0:
-                    print_message(
+                    logger.info(
                         f"best camera name: {self.cameras[idx].name}")
-                    print_message(faces)
+                    logger.info(faces)
                     results.append(faces[0])
                 else:
                     results.append(Result(face=False))
@@ -185,7 +189,7 @@ class CameraStreamManager:
                   f"{attempts}/{retry}. Retrying ..."
             self.best_stream.message.status = FaceDetectionStatus.WARNING
             self.best_stream.message.text = msg
-            print_message(msg)
+            logger.warning(msg)
         raise FaceDetectionError("Unable to detect face by any camera")
 
     def _wait_for_frame_detection(
@@ -202,11 +206,11 @@ class CameraStreamManager:
             if frame is not None:
                 return
             if wait_time < timeout:
-                print_message(f"Waiting for {camera.name}")
+                logger.info(f"Waiting for {camera.name}")
                 time.sleep(0.1)
                 wait_time += 0.1
             else:
-                print_message(
+                logger.info(
                     "Unable to get camera feed from "
                     f"'{camera.name}'"
                 )
@@ -232,7 +236,7 @@ class CameraStreamManager:
                       f"Attempt {attempts + 1}/{retry}."
                 self.best_stream.message.status = FaceDetectionStatus.WARNING
                 self.best_stream.message.text = msg
-                print_message(msg)
+                logger.warning(msg)
             attempts += 1
             time.sleep(1)
         return self.get_best_camera()

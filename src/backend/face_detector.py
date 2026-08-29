@@ -4,9 +4,13 @@ from typing import List, Tuple, TYPE_CHECKING, Deque, Any
 from abc import ABC, abstractmethod
 from collections import deque
 import cv2
+import logging
 from dataclasses import dataclass
 if TYPE_CHECKING:
     from .camera_stream import Camera
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -96,7 +100,7 @@ class MediaPiperDetector(FaceDetector):
                 confidence_level=info.categories[0].score,
             ))
         if len(results) > 1:
-            print(f"Faces: {len(results)}")
+            logger.info(f"Faces: {len(results)}")
         return results
 
     def draw_detections(self) -> None:

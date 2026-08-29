@@ -1,7 +1,11 @@
 from ..backend.sensor_stream import SensorStream
 from ..global_variables import SHUTDOWN_EVENT
 import asyncio
+import logging
 from ..backend.sensor_thresholds import LIGHT_THRESHOLD, SensorLevel
+
+
+logger = logging.getLogger(__name__)
 
 
 async def start_sensor_alerts(
@@ -16,5 +20,5 @@ async def start_sensor_alerts(
                 lux = light_sensor.get("lux")
                 threshold = LIGHT_THRESHOLD.classify(lux)
                 if threshold == SensorLevel.ALERT_HIGH:
-                    print("Alert: Too much light in the room.")
+                    logger.warning("Alert: Too much light in the room.")
         await asyncio.sleep(interval)

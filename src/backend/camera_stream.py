@@ -1,9 +1,13 @@
 import cv2
+import logging
 from dataclasses import dataclass, field
 import numpy as np
 import threading
 from .face_detector import BoundingBoxSmoother
 from .base_class import Stream
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -29,7 +33,7 @@ class CameraStream(Stream):
         self.camera = camera
 
     def is_connected(self) -> bool:
-        print(f"Connecting to stream: {self.camera.ip}")
+        logger.info(f"Connecting to stream: {self.camera.ip}")
         if self.camera.ip == "webcam":
             self.camera.capture = cv2.VideoCapture(0)
         else:
@@ -38,10 +42,10 @@ class CameraStream(Stream):
         self.camera.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
         if not self.camera.capture.isOpened():
-            print("Error: Could not open the HTTP stream. "
-                  "Check the IP and network connection.")
+            logger.warning("Error: Could not open the HTTP stream. "
+                           "Check the IP and network connection.")
             return False
-        print(f"Connecting established to: {self.camera.ip}")
+        logger.info(f"Connecting established to: {self.camera.ip}")
         self.camera.is_active = True
         return True
 
@@ -51,7 +55,7 @@ class CameraStream(Stream):
             )
         self.camera.event.set()
         self.camera.thread.start()
-        print(f"'{self.camera.name}' started")
+        logger.info(f"'{self.camera.name}' started")
 
     def _continue_capturing(self) -> None:
         consecutive_failures = 0
@@ -69,7 +73,7 @@ class CameraStream(Stream):
                     with self.camera.lock:
                         self.camera.is_active = False
                         self.camera.frame = None
-                    print(f"'{self.camera.name}' connection lost")
+                    logger.warning(f"'{self.camera.name}' connection lost")
                     return
 
 

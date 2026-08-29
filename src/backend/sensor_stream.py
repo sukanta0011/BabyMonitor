@@ -1,6 +1,7 @@
 import requests
 import threading
 import time
+import logging
 from datetime import datetime
 from typing import Deque, Dict, Any
 from dataclasses import dataclass
@@ -8,6 +9,9 @@ from .custom_wrappers import reconnect
 from .custom_errors import ConnectionFailure
 from ..global_variables import SHUTDOWN_EVENT
 from .base_class import Stream
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -28,10 +32,10 @@ class SensorStream(Stream):
         try:
             self._get_response(self.sensor.address, 5)
         except ConnectionFailure:
-            print("Sensor stream is unreachable.")
+            logger.warning("Sensor stream is unreachable.")
             return False
         except Exception as e:
-            print(f"Error: {e}")
+            logger.error(f"Error: {e}")
             return False
         self.sensor.is_active = True
         return True
@@ -55,7 +59,7 @@ class SensorStream(Stream):
             args=(), daemon=True
         )
         self.sensor.thread.start()
-        print("Sensor streaming started.")
+        logger.info("Sensor streaming started.")
 
     def _continue_reading(self) -> None:
         consecutive_failures = 0
@@ -73,14 +77,14 @@ class SensorStream(Stream):
                             {"time_stamp": datetime.now(),
                              "data": response.json()})
                 else:
-                    print(f"{response.text}")
+                    logger.warning(f"{response.text}")
             except ConnectionFailure:
                 consecutive_failures += 1
-                print("Sensor read failed ("
+                logger.warning("Sensor read failed ("
                       f"{consecutive_failures}/{failure_threshold})")
                 if consecutive_failures >= failure_threshold:
                     self.sensor.is_active = False
-                    print(
+                    logger.warning(
                         "Sensor considered offline — "
                         "waiting for rediscovery")
                     return
@@ -97,10 +101,10 @@ class SensorStream(Stream):
     def _run_connection_checking_loop(self, interval: int) -> None:
         while not SHUTDOWN_EVENT.is_set():
             if not self.sensor.is_active:
-                print("Attempting to reconnect sensor at "
+                logger.warning("Attempting to reconnect sensor at "
                       f"{self.sensor.address}...")
                 if self.is_connected():
-                    print(f"Sensor at {self.sensor.address} "
+                    logger.info(f"Sensor at {self.sensor.address} "
                           "reconnected — restarting stream")
                     self.start()
             time.sleep(interval)

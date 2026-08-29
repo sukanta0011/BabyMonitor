@@ -1,7 +1,11 @@
 import cv2
+import logging
 import numpy as np
 from typing import Tuple, Callable
 from ..global_variables import PRINT_LOCK, SHUTDOWN_EVENT
+
+
+logger = logging.getLogger(__name__)
 
 
 def merge_image_using_padding(frames: Tuple[np.ndarray, ...]) -> np.ndarray:
@@ -45,7 +49,7 @@ def merge_frames_horizontally(frames: Tuple[np.ndarray, ...],
     return final_frame
 
 
-def print_message(message: str) -> None:
-    if not SHUTDOWN_EVENT.is_set():
-        with PRINT_LOCK:
-            print(message)
+# def print_message(message: str) -> None:
+#     if not SHUTDOWN_EVENT.is_set():
+#         with PRINT_LOCK:
+#             print(message)
