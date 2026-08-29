@@ -10,7 +10,7 @@ from ..global_variables import FACE_DETECTION_THRESHOLD, SHUTDOWN_EVENT
 from .face_detector import FaceDetector, Result
 from .custom_errors import FaceDetectionError
 from .camera_stream import Camera, CameraStream
-from .helper_functions import print_message
+# from .helper_functions import print_message
 
 
 logger = logging.getLogger(__name__)

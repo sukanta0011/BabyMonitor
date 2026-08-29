@@ -2,7 +2,7 @@ import cv2
 import time
 from typing import List
 from src.backend.helper_functions import (
-    merge_frames_horizontally, print_message)
+    merge_frames_horizontally)
 from src.backend.camera_stream import CameraStream
 from src.backend.sensor_stream import SensorStream
 from .global_variables import (
@@ -109,11 +109,11 @@ def start_dashboard():
         stream_manager.start_camera_feed()
         run_dashboard(best_stream=best_stream, sensor_stream=sensor_stream)
     except RuntimeError as e:
-        print_message(e)
+        print(e)
     except KeyboardInterrupt as e:
-        print_message(e)
+        print(e)
     finally:
-        print_message("Triggering Shutdown event...")
+        print("Triggering Shutdown event...")
         SHUTDOWN_EVENT.set()
         if stream_manager is not None:
             stream_manager.stop_camera_feed()

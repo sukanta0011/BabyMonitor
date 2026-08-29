@@ -5,7 +5,11 @@ from .models import SensorsReadings, ErrorMessage
 from ..global_variables import SHUTDOWN_EVENT
 from ..backend.sensor_stream import SensorStream
 import asyncio
+import logging
 from .session import async_session
+
+
+logger = logging.getLogger(__name__)
 
 
 class SensorDataOperations:
@@ -99,5 +103,5 @@ class TableOperationManager:
                     try:
                         await manager.save_data(latest["data"])
                     except Exception as e:
-                        print(f"Failed to save sensor data: {e}")
+                        logger.error(f"Failed to save sensor data: {e}")
             await asyncio.sleep(interval)
