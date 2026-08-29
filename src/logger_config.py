@@ -1,5 +1,6 @@
 import logging
 import json
+import os
 from logging.handlers import RotatingFileHandler
 from datetime import datetime, timezone
 
@@ -19,6 +20,7 @@ class JsonFormatter(logging.Formatter):
 
 
 def setup_logging(log_file: str = "logs/babymonitor.log") -> None:
+    os.makedirs(os.path.dirname(log_file), exist_ok=True)
     handler = RotatingFileHandler(
         log_file, maxBytes=5 * 1024 * 1024, backupCount=5)
     handler.setFormatter(JsonFormatter())

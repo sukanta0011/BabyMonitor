@@ -15,6 +15,7 @@ from ..db.table_operations import TableOperationManager
 from ..db.session import engine
 from ..db.models import Base
 from ..backend.alerts import start_sensor_alerts
+from ..logger_config import setup_logging
 
 
 async def generate_best_frame(best_frame: BestCameraStream):
@@ -43,6 +44,8 @@ async def generate_camera_frame(camera: Camera):
 
 
 async def lifespan(app: FastAPI):
+    setup_logging()
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
