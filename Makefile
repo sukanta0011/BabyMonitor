@@ -27,11 +27,7 @@ fclean: clean
 re: fclean install
 
 lint: .venv/.installed
-	$(UV) run flake8 $(SRC)
-	$(UV) run mypy $(SRC) --warn-return-any \
-		      --warn-unused-ignores \
-		      --ignore-missing-imports \
-		      --disallow-untyped-defs \
-		      --check-untyped-defs
+	$(UV) run ruff check .
+	$(UV) run mypy .
 
 .PHONY: install run debug clean fclean lint re

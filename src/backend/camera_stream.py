@@ -25,7 +25,7 @@ class Camera:
         field(default_factory=lambda: BoundingBoxSmoother(1))
 
 
-from ..global_variables import SHUTDOWN_EVENT
+from ..global_variables import SHUTDOWN_EVENT # noqa: E402
 
 
 class CameraStream(Stream):
@@ -62,19 +62,20 @@ class CameraStream(Stream):
         failure_threshold = 5
         while not SHUTDOWN_EVENT.is_set():
             self.camera.event.wait()
-            ret, frame = self.camera.capture.read()
-            if ret:
-                consecutive_failures = 0
-                with self.camera.lock:
-                    self.camera.frame = frame
-            else:
-                consecutive_failures += 1
-                if consecutive_failures >= failure_threshold:
+            if self.camera.capture:
+                ret, frame = self.camera.capture.read()
+                if ret:
+                    consecutive_failures = 0
                     with self.camera.lock:
-                        self.camera.is_active = False
-                        self.camera.frame = None
-                    logger.warning(f"'{self.camera.name}' connection lost")
-                    return
+                        self.camera.frame = frame
+                else:
+                    consecutive_failures += 1
+                    if consecutive_failures >= failure_threshold:
+                        with self.camera.lock:
+                            self.camera.is_active = False
+                            self.camera.frame = None
+                        logger.warning(f"'{self.camera.name}' connection lost")
+                        return
 
 
 if __name__ == "__main__":

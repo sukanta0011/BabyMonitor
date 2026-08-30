@@ -1,6 +1,5 @@
 from src.backend.camera_stream import Camera, CameraStream
-from src.backend.face_detector import MediaPiperDetector, YuNetDetector
-import cv2
+from src.backend.face_detector import YuNetDetector
 import threading
 import time
 
@@ -12,8 +11,8 @@ camera = Camera(
     lock=test_lock, event=threading.Event()
     )
 stream = CameraStream(camera)
-fd = MediaPiperDetector(camera)
-# fd = YuNetDetector(camera)
+# fd = MediaPiperDetector(camera)
+fd = YuNetDetector(camera)
 if stream.is_connected():
     stream.start()
 

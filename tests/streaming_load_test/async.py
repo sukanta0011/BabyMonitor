@@ -7,12 +7,16 @@ URL = "http://localhost:8000/video"
 DURATION = 10
 
 
-async def simulate_viewer(viewer_id: int, counters: list, session: aiohttp.ClientSession):
+async def simulate_viewer(
+        viewer_id: int, counters: list, session: aiohttp.ClientSession):
     start = time.time()
     try:
-        async with session.get(URL, timeout=aiohttp.ClientTimeout(total=DURATION + 5)) as response:
+        async with session.get(
+            URL, timeout=aiohttp.ClientTimeout(
+                total=DURATION + 5)) as response:
             async for chunk in response.content.iter_chunked(1024):
-                if chunk.startswith(b'--frame') or b'Content-Type: image/jpeg' in chunk:
+                if chunk.startswith(b'--frame') or \
+                        b'Content-Type: image/jpeg' in chunk:
                     counters[viewer_id] += 1
                 if time.time() - start > DURATION:
                     break
@@ -31,8 +35,10 @@ async def start_load_test(viewers: int) -> float:
             for i in range(viewers)
         ]
 
-        with tqdm(total=DURATION, desc=f"{viewers} viewer(s)", unit="s") as bar:
-            last_elapsed = 0
+        with tqdm(
+            total=DURATION, desc=f"{viewers} viewer(s)",\
+                unit="s") as bar:
+            last_elapsed = 0.0
             while not all(t.done() for t in tasks):
                 elapsed = min(time.time() - start_time, DURATION)
                 bar.update(elapsed - last_elapsed)
@@ -44,8 +50,10 @@ async def start_load_test(viewers: int) -> float:
 
     elapsed = time.time() - start_time
     total_chunks = sum(counters)
-    avg_fps_per_viewer = (total_chunks / elapsed) / viewers if viewers > 0 else 0
-    print(f"  {viewers} viewer(s): {total_chunks} total chunks over {elapsed:.1f}s "
+    avg_fps_per_viewer = (total_chunks / elapsed) / viewers\
+        if viewers > 0 else 0
+    print(f"  {viewers} viewer(s): {total_chunks} "
+          f"total chunks over {elapsed:.1f}s "
           f"(~{avg_fps_per_viewer:.2f} chunks/s per viewer)\n")
     return avg_fps_per_viewer
 

@@ -17,7 +17,7 @@ camera_data_lock = threading.Lock()
 sensor_data_lock = threading.Lock()
 active_camera_detection_lock = threading.Lock()
 
-from src.backend.camera_stream import Camera
+from src.backend.camera_stream import Camera # noqa: E402
 
 CAMERAS = [
     Camera(
@@ -30,7 +30,7 @@ CAMERAS = [
     #     event=threading.Event()),
 ]
 
-from src.backend.sensor_stream import Sensor
+from src.backend.sensor_stream import Sensor # noqa: E402
 
 SENSOR = Sensor(
     address=SENSORS, data=deque(), lock=sensor_data_lock)

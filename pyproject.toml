@@ -18,6 +18,19 @@ dependencies = [
     "uvicorn>=0.51.0",
 ]
 
+[dependency-groups]
+dev = [
+    "ruff>=0.6.0",
+    "mypy>=1.11.0",
+    "types-tqdm",
+]
+
+[tool.ruff]
+line-length = 79
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+
 [tool.uv]
 override-dependencies = [
     "opencv-contrib-python; sys_platform == 'never'",

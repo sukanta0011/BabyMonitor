@@ -1,4 +1,5 @@
 import requests
+from requests import Response
 import threading
 import time
 import logging
@@ -41,7 +42,7 @@ class SensorStream(Stream):
         return True
 
     @reconnect(max_try=3, wait_time=5)
-    def _get_response(self, address: str, timeout: int) -> Dict:
+    def _get_response(self, address: str, timeout: int) -> Response:
         return requests.get(url=address, timeout=timeout)
 
     def get_latest_data(self) -> Dict[Any, Any] | None:

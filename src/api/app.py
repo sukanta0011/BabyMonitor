@@ -3,8 +3,8 @@ from fastapi.responses import StreamingResponse, JSONResponse
 import cv2
 from typing import Dict
 import asyncio
-from ..global_variables import SHUTDOWN_EVENT, CAMERAS
-from src.main import SENSOR
+from ..global_variables import SHUTDOWN_EVENT, CAMERAS, SENSOR
+# from src.main import SENSOR
 from ..backend.face_detector import YuNetDetector
 from ..backend.camera_stream_manager import (
     CameraStreamManager, BestCameraStream)
@@ -55,7 +55,7 @@ async def lifespan(app: FastAPI):
     stream_manager = None
 
     stream_manager = CameraStreamManager(
-        CAMERAS, YuNetDetector, app.state.best_frame)
+        CAMERAS, YuNetDetector, app.state.best_frame, 0.4)
     stream_manager.start_auto_connection_check()
     stream_manager.start_camera_feed()
     # else:
@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI):
     if stream_manager is not None:
         stream_manager.stop_camera_feed()
     for camera in CAMERAS:
-        if camera.is_active:
+        if camera.is_active and camera.capture:
             camera.capture.release()
 
 
@@ -87,7 +87,7 @@ app = FastAPI(
 
 
 @app.get("/")
-async def index():
+async def index() -> FileResponse:
     return FileResponse("src/api/static/index.html")
 
 
@@ -106,7 +106,7 @@ async def get_best_view(request: Request) -> StreamingResponse:
 
 
 @app.get("/frame_info")
-async def get_best_viewer_info(request: Request):
+async def get_best_viewer_info(request: Request) -> JSONResponse:
     best_frame: BestCameraStream = request.app.state.best_frame
     with best_frame.lock:
         frame_info = {
@@ -120,15 +120,16 @@ async def get_best_viewer_info(request: Request):
 
 
 @app.get("/sensors")
-async def get_sensor_data(request: Request):
+async def get_sensor_data(request: Request) -> JSONResponse:
     sensor_stream: SensorStream = request.app.state.sensor_stream
     latest = sensor_stream.get_latest_data()
     if latest:
         return JSONResponse(content=latest.get('data'))
+    return JSONResponse(content={})
 
 
 @app.get("/cameras")
-async def get_cameras():
+async def get_cameras() -> JSONResponse:
     cams = []
     for camera in CAMERAS:
         with camera.lock:
@@ -140,8 +141,9 @@ async def get_cameras():
     return JSONResponse(content=cams)
 
 
-@app.get("/video/{camera_name}")
-async def get_camera_view(camera_name: str):
+@app.get("/video/{camera_name}", response_model=None)
+async def get_camera_view(
+    camera_name: str) -> JSONResponse | StreamingResponse:
     camera = next(
         (c for c in CAMERAS if c.name == camera_name), None)
     if camera is None:

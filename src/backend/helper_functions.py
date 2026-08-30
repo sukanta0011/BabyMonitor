@@ -2,7 +2,6 @@ import cv2
 import logging
 import numpy as np
 from typing import Tuple, Callable
-from ..global_variables import SHUTDOWN_EVENT
 
 
 logger = logging.getLogger(__name__)

@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, Column
 from typing import Dict
 from .models import SensorsReadings, ErrorMessage
 from ..global_variables import SHUTDOWN_EVENT
@@ -35,7 +35,7 @@ class ErrorMessageOperation:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, msg: str) -> int:
+    async def create(self, msg: str) -> Column[int]:
         err_msg = ErrorMessage(msg=msg)
         self.session.add(err_msg)
         await self.session.commit()
@@ -76,7 +76,9 @@ class TableOperationManager:
         return reading
 
     async def _apply_sensor(
-            self, reading, sensor_data, value_map, status_field, msg_field):
+            self, reading: SensorsReadings, sensor_data: Dict | None,
+            value_map: Dict, status_field: str, msg_field:str
+            ) -> None:
         if sensor_data is None:
             return
         status = sensor_data.get("status")
@@ -85,10 +87,11 @@ class TableOperationManager:
             for reading_field, json_key in value_map.items():
                 setattr(reading, reading_field, sensor_data.get(json_key))
         else:
-            msg = sensor_data.get("error")
+            msg = sensor_data.get("error") or "unknown error"
             msg_id = await self.error_msg.get_id(msg)
             if msg_id is None:
-                msg_id = await self.error_msg.create(msg)
+                new_msg = await self.error_msg.create(msg)
+                msg_id = int(new_msg.id)
             setattr(reading, msg_field, msg_id)
 
     @staticmethod

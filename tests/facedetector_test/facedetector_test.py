@@ -7,10 +7,10 @@ IMAGE_PATH = sys.argv[1] if len(sys.argv) > 1 else "test_frames/test.png"
 
 def enhance_contrast(image: np.ndarray) -> np.ndarray:
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-    l, a, b = cv2.split(lab)
+    l_factor, a, b = cv2.split(lab)
 
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    l_enhanced = clahe.apply(l)
+    l_enhanced = clahe.apply(l_factor)
 
     enhanced_lab = cv2.merge((l_enhanced, a, b))
     return cv2.cvtColor(enhanced_lab, cv2.COLOR_LAB2BGR)
@@ -32,14 +32,16 @@ def test_yunet(image: np.ndarray):
         model='face_detection_models/face_detection_yunet_2023mar.onnx',
         config='',
         input_size=(w, h),
-        score_threshold=0.1,   # lowered from 0.6 to see borderline detections too
+        score_threshold=0.4,
         nms_threshold=0.3,
         top_k=5000
     )
     _, faces = detector.detect(image)
     if faces is None:
         return []
-    return [(int(f[0]), int(f[1]), int(f[2]), int(f[3]), float(f[14])) for f in faces]
+    return [
+        (int(f[0]), int(f[1]), int(f[2]), int(f[3]), float(f[14]))\
+            for f in faces]
 
 
 def main():

@@ -12,7 +12,8 @@ def simulate_viewer(viewer_id: int, counters: dict, lock: threading.Lock):
     try:
         with requests.get(URL, stream=True, timeout=5) as response:
             for chunk in response.iter_content(chunk_size=1024):
-                if chunk.startswith(b'--frame') or b'Content-Type: image/jpeg' in chunk:
+                if chunk.startswith(
+                    b'--frame') or b'Content-Type: image/jpeg' in chunk:
                     with lock:
                         counters[viewer_id] += 1
                 if time.time() - start > DURATION:
@@ -34,7 +35,7 @@ def start_load_test(viewers: int) -> float:
         t.start()
 
     with tqdm(total=DURATION, desc=f"{viewers} viewer(s)", unit="s") as bar:
-        last_elapsed = 0
+        last_elapsed = 0.0
         while any(t.is_alive() for t in threads):
             elapsed = min(round(time.time() - start_time, 2), DURATION)
             bar.update(elapsed - last_elapsed)
@@ -49,9 +50,10 @@ def start_load_test(viewers: int) -> float:
 
     elapsed = round(time.time() - start_time, 2)
     total_chunks = sum(counters.values())
-    avg_fps_per_viewer = (total_chunks / elapsed) / viewers if viewers > 0 else 0
-    print(f"  {viewers} viewer(s): {total_chunks} total chunks over {elapsed:.1f}s "
-          f"(~{avg_fps_per_viewer:.2f} chunks/s per viewer)\n")
+    avg_fps_per_viewer = (
+        total_chunks / elapsed) / viewers if viewers > 0 else 0
+    print(f"  {viewers} viewer(s): {total_chunks} total chunks over "
+          f"{elapsed:.1f}s  (~{avg_fps_per_viewer:.2f} chunks/s per viewer)\n")
     return avg_fps_per_viewer
 
 

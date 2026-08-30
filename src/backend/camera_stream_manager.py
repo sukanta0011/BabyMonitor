@@ -35,7 +35,7 @@ class BestCameraStream:
     frame: np.ndarray | None = None
     encoded_frame: bytes | None = None
     result: Result | None = None
-    message: Message = Message
+    message: Message = field(default_factory=Message)
     thread: threading.Thread | None = None
     lock: threading.Lock = field(default_factory=threading.Lock)
     detection_failure_event: threading.Event =\
@@ -45,9 +45,10 @@ class BestCameraStream:
 class CameraStreamManager:
     def __init__(
             self, cameras: List[Camera],
-            face_detection_model: FaceDetector,
+            face_detection_model: type[FaceDetector],
             best_stream: BestCameraStream,
-            face_detection_threshold: float = FACE_DETECTION_THRESHOLD):
+            face_detection_threshold: float = FACE_DETECTION_THRESHOLD
+            ) -> None:
         self.cameras = cameras
         self.face_detection_threshold = face_detection_threshold
         self.best_stream = best_stream
@@ -57,7 +58,7 @@ class CameraStreamManager:
         self.face_detectors = [self.fd_model(camera) for camera in cameras]
         # self.results = [Result(face=False) for _ in cameras]
 
-    def start_camera_feed(self) -> np.ndarray:
+    def start_camera_feed(self) -> None:
         self.best_stream.thread = threading.Thread(
             target=self._run_detection_loop, args=(), daemon=True)
         self.best_stream.thread.start()
@@ -67,7 +68,7 @@ class CameraStreamManager:
             self.best_stream.thread.join(timeout)
 
     def start_auto_connection_check(self) -> None:
-        self.active_cameras = []
+        # self.active_cameras: List[] = []
         self.connection_checking_thread = threading.Thread(
             target=self._run_connection_checking_loop,
             args=(), daemon=True
@@ -81,7 +82,8 @@ class CameraStreamManager:
                     if stream.camera.is_active:
                         continue
                 if stream.is_connected():
-                    logger.info(f"New camera is detected at ip :{stream.camera.ip}")
+                    logger.info(
+                        f"New camera is detected at ip :{stream.camera.ip}")
                     stream.start()
             time.sleep(60)
 
@@ -100,7 +102,7 @@ class CameraStreamManager:
                     #     self.face_detectors[idx].stream.camera)
                 self._wait_for_frame_detection(self.cameras[idx])
                 if not SHUTDOWN_EVENT.is_set():
-                    result: Result = \
+                    result: List[Result] = \
                         self.face_detectors[idx].extract_face_info()
                     if len(result) > 0:
                         single_result = result[0]
@@ -141,6 +143,8 @@ class CameraStreamManager:
                     self.best_stream.name = \
                         self.cameras[idx].name
                     frame = self.cameras[idx].frame
+                    if frame is None:
+                        return
                     self.best_stream.frame = frame
                     #  Encode the frame
                     success, buffer = cv2.imencode(".jpg", frame)
@@ -180,7 +184,7 @@ class CameraStreamManager:
                 else:
                     results.append(Result(face=False))
             scores = [result.confidence_level for result in results]
-            best_camera_index = np.argmax(scores)
+            best_camera_index = int(np.argmax(scores))
             if scores[best_camera_index] > self.face_detection_threshold:
                 return best_camera_index
             attempts += 1
@@ -222,7 +226,7 @@ class CameraStreamManager:
         attempts = 0
         single_result = Result(face=False)
         while (attempts < retry and not SHUTDOWN_EVENT.is_set()):
-            result: Result = \
+            result: List[Result] = \
                 self.face_detectors[cam_idx].extract_face_info()
             if len(result) > 0:
                 single_result = result[0]
