@@ -148,3 +148,71 @@ ceiling already far exceeds this project's realistic usage.
   and scaled it, rather than laying it out natively; adding the tag plus
   `-webkit-text-size-adjust: 100%` fixed both the sizing and the
   "have to zoom to read" symptom.
+
+---
+
+## Automated deployment (CI → registry → Watchtower) and the migration gap
+
+**The pipeline.** GitHub Actions builds the `arm64` Docker image (via QEMU +
+Buildx, since the runner itself is x86_64) on every push to `main`, and
+pushes it to `ghcr.io`. Watchtower runs as its own container on the Pi,
+polling `ghcr.io` every 5 minutes for a newer image tag; when one appears,
+it pulls and restarts just the `api` container. `db` is deliberately
+excluded from Watchtower's watch list (via a label + `--label-enable`) so
+a Postgres major-version bump never happens unattended.
+
+**Why pull-based, not push-based.** The Pi has no public IP and sits
+behind the home router's NAT — GitHub's runners can't reach it directly to
+trigger a deploy. Rather than opening external access just to make
+push-based deployment possible, the Pi periodically checks the registry
+itself and pulls — no inbound connection into the home network required
+at all, consistent with the decision not to expose the dashboard
+externally yet either.
+
+**The real gap this exposes: schema changes aren't safe to auto-deploy
+yet.** `Base.metadata.create_all()` (used at startup) only creates tables
+that don't already exist — it never alters an existing table's columns.
+If a schema change (e.g. adding a column to `SensorsReadings`) were pushed
+through this pipeline as-is, Watchtower would faithfully pull and restart
+the new code, but the running database would still have the old schema —
+producing failures on the very first query touching the changed table,
+automatically, unattended, with no human in the loop to catch it before
+it happens. This is precisely the class of failure the project's own
+"V1.5 — go live" milestone is meant to surface and harden against.
+
+**Current mitigation, not a fix.** Schema changes are deployed manually —
+apply the migration by hand on the Pi, confirm it, *then* allow the
+automated pull to bring in code that depends on it — rather than trusting
+the automated pipeline for that one class of change. Proper Alembic
+migrations (versioned, applied automatically as part of deploy) are the
+real fix, deliberately deferred until schema iteration is actually
+happening, rather than building migration tooling around a schema that's
+still settling.
+
+---
+
+## CI: three separate, small, honest lessons from wiring it up
+
+Getting the two GitHub Actions workflows (lint/type-check, and the `arm64`
+Docker build) working cleanly surfaced a few genuinely instructive
+mistakes worth keeping:
+
+- **`mypy` caught two real, previously-unnoticed bugs**, not just missing
+  type hints: `message: Message = Message` (assigning the class itself as
+  a dataclass default, silently shared across every instance — the exact
+  bug flagged and left unfixed several times earlier in the project,
+  finally caught for good by static analysis) and a genuine `None`-frame
+  crash risk in the detection loop's `cv2.imencode` call, where a
+  connected-but-not-yet-streaming camera could reach the encoding step
+  with `frame is None`.
+- **A route returning two different response types** (`StreamingResponse`
+  in the success path, `JSONResponse` on a 404) crashed FastAPI's startup
+  entirely with an opaque Pydantic error — fixed with `response_model=None`
+  on that route, telling FastAPI not to attempt inferring a response
+  schema for it.
+- **Docker image tags must be all-lowercase** — `${{ github.repository }}`
+  expands to the repo's real casing (`sukanta0011/BabyMonitor`), which
+  Buildx rejects outright for a tag. Fixed by hardcoding the tag as a
+  literal, all-lowercase string in both the workflow and
+  `docker-compose.yml`, rather than trusting a variable to match casing
+  across two separate files.
