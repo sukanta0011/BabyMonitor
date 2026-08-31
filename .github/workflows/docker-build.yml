@@ -38,4 +38,4 @@ jobs:
           context: .
           platforms: linux/arm64
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          tags: ghcr.io/sukanta0011/babymonitor:latest
