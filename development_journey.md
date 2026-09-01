@@ -216,3 +216,31 @@ mistakes worth keeping:
   literal, all-lowercase string in both the workflow and
   `docker-compose.yml`, rather than trusting a variable to match casing
   across two separate files.
+
+---
+
+## Watchtower / Docker Engine v29 API version mismatch
+
+**Symptom**: Watchtower crash-looped immediately on the Pi with
+`client version 1.25 is too old. Minimum supported API version is 1.40/1.44`.
+
+**Cause**: a confirmed, currently-open upstream bug in `containrrr/watchtower`
+— a recent Docker Engine v29 change broke Watchtower's own internal Docker
+API version auto-detection, affecting many users as of this same week (not
+a local misconfiguration).
+
+**Fix**: pinned the Docker API version explicitly via environment variable,
+bypassing Watchtower's broken auto-detection:
+
+```yaml
+watchtower:
+  environment:
+    - DOCKER_API_VERSION=1.44
+```
+
+**Lesson**: when a well-established tool suddenly breaks with no local
+config change to explain it, check whether it's a known upstream issue
+before assuming a local mistake — a quick search confirmed multiple open
+GitHub issues from the same week, which redirected debugging effort from
+"what did I configure wrong" to "how do I work around a known bug,"
+saving real time.
