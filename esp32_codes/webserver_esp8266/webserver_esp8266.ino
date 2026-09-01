@@ -1,32 +1,26 @@
-// #include <WiFi.h>
+#include <ArduinoJson.h>
+#include <ArduinoJson.hpp>
 #include <ESP8266WiFi.h>
 #include <ESPAsyncWebServer.h>
-#include <ArduinoJson.h>
-#include <ESPmDNS.h>
+#include <ESP8266mDNS.h>
 #include "Sensor.h"
 
 const char* ssid = "TP-Link_509A";
 const char* password = "84710574";
 
-// // ESP32 CAM
-// const int SDA_PIN = 15;
-// const int SCL_PIN = 14;
-// const char* mdnsName = "esp32_sensor1";
-
 // ESP8266
 const int SDA_PIN = 4;
 const int SCL_PIN = 5;
-const char* mdnsName = "esp32_sensor1";
+const char* mdnsName = "esp8266_sensor1";
 
 int light_sensor_on = 0;
 int co2_sensor_on = 0;
 
 AsyncWebServer server(80);
 String output;
-JsonDocument doc;
 BH1750 light_sensor(0x23);
 SCD40 co2_sensor(0x62);
-SemaphoreHandle_t mutex;
+// SemaphoreHandle_t mutex;
 
 
 int connect_to_wifi() {
@@ -38,7 +32,9 @@ int connect_to_wifi() {
     Serial.println("WiFi connection unsuccessful, retrying...");
   }
   if (max_try == 0) return 0;
-  Serial.println(WiFi.localIP());
+  Serial.print("ip: 'http://");
+  Serial.print(WiFi.localIP());
+  Serial.println("' connected");
   return 1;
 }
 
@@ -54,7 +50,8 @@ void start_mdns() {
 
 
 void update_sensor_data() {
-  xSemaphoreTake(mutex, portMAX_DELAY);
+  JsonDocument doc;
+  // xSemaphoreTake(mutex, portMAX_DELAY);
 
   // BH1750
   JsonObject bh = doc["bh1750"].to<JsonObject>();
@@ -85,14 +82,14 @@ void update_sensor_data() {
   }
 
   serializeJson(doc, output);
-  xSemaphoreGive(mutex);
+  // xSemaphoreGive(mutex);
 }
 
 
 void setup() {
   Serial.begin(115200);
   Wire.begin(SDA_PIN, SCL_PIN);
-  mutex = xSemaphoreCreateMutex();
+  // mutex = xSemaphoreCreateMutex();
 
   if (connect_to_wifi()) {
     light_sensor_on = light_sensor.begin();
@@ -101,14 +98,14 @@ void setup() {
     start_mdns();
 
     server.on("/sensors", HTTP_GET, [](AsyncWebServerRequest *request){
-      xSemaphoreTake(mutex, portMAX_DELAY);
+      // xSemaphoreTake(mutex, portMAX_DELAY);
       if (light_sensor_on && co2_sensor_on)
         request->send(200, "application/json", output);
       else if (!light_sensor_on && !co2_sensor_on)
         request->send(500, "application/json", output);
       else
         request->send(206, "application/json", output);
-      xSemaphoreGive(mutex);
+      // xSemaphoreGive(mutex);
     });
 
     server.begin();
