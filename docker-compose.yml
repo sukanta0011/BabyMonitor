@@ -41,6 +41,8 @@ services:
   watchtower:
     image: containrrr/watchtower:latest
     container_name: watchtower
+    environment:
+    - DOCKER_API_VERSION=1.44
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     command: --interval 600 --label-enable
