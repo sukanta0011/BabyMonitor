@@ -12,8 +12,8 @@
 // Enter your WiFi credentials
 // ===========================
 const char* ssid = "TP-Link_509A";
-const char* password = "******";
-const char* mdnsName = "esp32_cam1";
+const char* password = "84710574";
+const char* mdnsName = "esp32_cam2";
 
 void startCameraServer();
 void setupLedFlash();
@@ -137,7 +137,7 @@ void setup() {
   Serial.print(WiFi.localIP());
   Serial.println("' to connect");
 
-  start_mdns()
+  start_mdns();
 }
 
 void loop() {
