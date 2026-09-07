@@ -140,7 +140,7 @@ void  setup()
   Serial.begin(115200);
   if (connect_to_wifi())
   {
-    http.begin("http://pi5.local:8000/video/cam2");
+    http.begin("http://sukantapc.local:8000/video/cam2");
     httpCode = http.GET();
     if (httpCode == 200)
     {

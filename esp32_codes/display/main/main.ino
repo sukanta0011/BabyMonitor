@@ -23,7 +23,7 @@ WiFiClient* stream;
 int httpCode;
 Arduino_DataBus *bus = new Arduino_ESP32SPI(TFT_DC, TFT_CS, TFT_SCLK, TFT_MOSI, GFX_NOT_DEFINED);
 Arduino_GFX *gfx = new Arduino_ILI9488_18bit(bus, TFT_RST, 1 /* rotation */, false /* IPS */);
-const uint32_t                      buffer_size = 50000;
+const uint32_t                      buffer_size = 35000;
 RingBuffer<uint8_t, buffer_size>    buffer;
 uint8_t                             buffer_cpy[buffer_size];
 uint32_t                            start = 0, end = 0;
@@ -212,7 +212,7 @@ void setup()
 
     if (connect_to_wifi())
     {
-        http.begin("http://pi5.local:8000/video/cam2");
+        http.begin("http://sukantapc.local:8000/video/cam2");
         httpCode = http.GET();
         if (httpCode == 200)
         {
