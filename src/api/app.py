@@ -35,7 +35,8 @@ async def generate_camera_frame(camera: Camera):
         with camera.lock:
             frame = camera.frame
         if frame is not None:
-            success, buffer = cv2.imencode(".jpg", frame)
+            success, buffer = cv2.imencode(
+                ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
             if success:
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' +

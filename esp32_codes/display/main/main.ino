@@ -269,7 +269,9 @@ void    loop()
     Serial.print("us | decode+draw: ");
     Serial.print(t4 - t3);
     Serial.print("us | found: ");
-    Serial.println(found);
+    Serial.print(found);
+    Serial.print(" | Size: ");
+    Serial.println(end - start);
 
     delay(200);
 }

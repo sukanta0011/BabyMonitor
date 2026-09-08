@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 from typing import Deque, Dict, Any
 from dataclasses import dataclass
+from .helper_functions import print_message
 from .custom_wrappers import reconnect
 from .custom_errors import ConnectionFailure
 from ..global_variables import SHUTDOWN_EVENT
@@ -60,6 +61,7 @@ class SensorStream(Stream):
             args=(), daemon=True
         )
         self.sensor.thread.start()
+        print_message(f"{self.sensor.address} started streaming streaming.")
         logger.info("Sensor streaming started.")
 
     def _continue_reading(self) -> None:
@@ -79,15 +81,18 @@ class SensorStream(Stream):
                              "data": response.json()})
                 else:
                     logger.warning(f"{response.text}")
-            except ConnectionFailure:
+            except Exception:
                 consecutive_failures += 1
                 logger.warning("Sensor read failed ("
                       f"{consecutive_failures}/{failure_threshold})")
                 if consecutive_failures >= failure_threshold:
                     self.sensor.is_active = False
+                    self.sensor.data[-1] = {}
                     logger.warning(
                         "Sensor considered offline — "
                         "waiting for rediscovery")
+                    print_message("Sensor considered offline — "
+                                  "waiting for rediscovery")
                     return
 
             time.sleep(10)
@@ -106,6 +111,8 @@ class SensorStream(Stream):
                       f"{self.sensor.address}...")
                 if self.is_connected():
                     logger.info(f"Sensor at {self.sensor.address} "
+                          "reconnected — restarting stream")
+                    print_message(f"Sensor at {self.sensor.address} "
                           "reconnected — restarting stream")
                     self.start()
             time.sleep(interval)

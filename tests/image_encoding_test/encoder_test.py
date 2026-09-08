@@ -21,7 +21,8 @@ def main():
     print("-" * 25)
 
     for q in QUALITIES_TO_TEST:
-        success, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, q])
+        success, buffer = cv2.imencode(
+            ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, q])
         if success:
             print(f"{q:>8} | {len(buffer):>12}")
         else:
