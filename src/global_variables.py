@@ -25,9 +25,9 @@ CAMERAS = [
         lock=camera_data_lock,
         event=threading.Event()),
     Camera(
-        ip=CAM2, name="cam2",
-        lock=camera_data_lock,
-        event=threading.Event()),
+            ip=CAM2, name="cam2",
+            lock=camera_data_lock,
+            event=threading.Event()),
     # Camera(
     #     ip="webcam", name="webcam",
     #     lock=camera_data_lock,
