@@ -23,9 +23,9 @@ WiFiClient* stream;
 int httpCode;
 Arduino_DataBus *bus = new Arduino_ESP32SPI(TFT_DC, TFT_CS, TFT_SCLK, TFT_MOSI, GFX_NOT_DEFINED);
 Arduino_GFX *gfx = new Arduino_ILI9488_18bit(bus, TFT_RST, 1 /* rotation */, false /* IPS */);
-const uint32_t                      buffer_size = 35000;
+const uint32_t                      buffer_size = 102400;
 RingBuffer<uint8_t, buffer_size>    buffer;
-uint8_t                             buffer_cpy[buffer_size];
+uint8_t                             *buffer_cpy;
 uint32_t                            start = 0, end = 0;
 
 
@@ -44,29 +44,6 @@ int connect_to_wifi() {
     return 1;
 }
 
-// void read_from_stream(uint32_t max_read = buffer_size)
-// {
-//     uint32_t bytes_read = 0;
-//     uint8_t temp[512];
-
-//     while (stream->available() && bytes_read < max_read)
-//     {
-//         size_t n = stream->readBytes(temp, min((size_t)stream->available(), sizeof(temp)));
-//         for (size_t i = 0; i < n; i++)
-//         {
-//             buffer.push(temp[i]);
-//             bytes_read += 1;
-//         }
-
-//         // check for a complete frame after every chunk, not just once at the end
-//         buffer.copy_data(buffer_cpy);
-//         if (extract_frame(buffer_cpy, buffer_size, start, end))
-//         {
-//             decode_and_display(buffer_cpy + start, (end - start));
-//         }
-//     }
-// }
-
 void    read_from_stream(uint32_t max_read=buffer_size)
 {
     uint32_t    bytes_read = 0;
@@ -80,12 +57,6 @@ void    read_from_stream(uint32_t max_read=buffer_size)
             buffer.push(temp[i]);
             bytes_read += 1;
         }
-        // val = stream->read();
-        // if (val != -1) 
-        // {
-        //     buffer.push(val);
-        //     bytes_read += 1;
-        // }
     }
     // Serial.print("Buffer read: ");
     // Serial.println(bytes_read);
@@ -96,14 +67,6 @@ bool jpeg_output_callback(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t
     gfx->draw16bitRGBBitmap(x, y, bitmap, w, h);
     return true;  // true = keep decoding, false = abort
 }
-// unsigned long draw_time_accumulator = 0;
-// bool jpeg_output_callback(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap)
-// {
-//     unsigned long start = micros();
-//     gfx->draw16bitRGBBitmap(x, y, bitmap, w, h);
-//     draw_time_accumulator += micros() - start;
-//     return true;
-// }
 
 void setup_decoder()
 {
@@ -113,29 +76,11 @@ void setup_decoder()
 
 void decode_and_display(uint8_t *frame, uint32_t frame_size)
 {
-    // if (frame_size < 1000)
-    // {
-    TJpgDec.drawJpg(0, 0, frame, frame_size);
-    // }
+    if (frame_size < buffer_size)
+    {
+        TJpgDec.drawJpg(0, 0, frame, frame_size);
+    }
 }
-
-// void decode_and_display(uint8_t *frame, uint32_t frame_size)
-// {
-//     if (frame_size < 10000)
-//     {
-//         draw_time_accumulator = 0;
-//         unsigned long t0 = micros();
-//         TJpgDec.drawJpg(0, 0, frame, frame_size);
-//         unsigned long total = micros() - t0;
-
-//         Serial.print("total decode+draw: ");
-//         Serial.print(total);
-//         Serial.print("us | draw-only (sum of callback calls): ");
-//         Serial.print(draw_time_accumulator);
-//         Serial.print("us | decode-only (inferred): ");
-//         Serial.println(total - draw_time_accumulator);
-//     }
-// }
 
 void    print_raw_bites(uint8_t *data, const uint32_t size)
 {
@@ -208,7 +153,12 @@ void setup()
 {
     Serial.begin(115200);
     // buffer_cpy = buffer.get_data();
-
+    buffer_cpy = (uint8_t*)ps_malloc(sizeof(uint8_t) * buffer_size);
+    if (!buffer.is_valid() || buffer_cpy == nullptr)
+    {
+        Serial.println("FATAL: PSRAM allocation failed. Halting.");
+        while (true){ delay(1000); }
+    }
 
     if (connect_to_wifi())
     {

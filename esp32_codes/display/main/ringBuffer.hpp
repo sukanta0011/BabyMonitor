@@ -14,13 +14,16 @@ class RingBuffer
         uint32_t    head = 0;
         uint32_t    tail = 0;
         uint32_t    count = 0;
-        T           data[N];
+        bool        valid = false;
+        T           *data;
 
     public:
         RingBuffer();
+        ~RingBuffer() { free(data); };
+        bool    is_valid() { return valid; }
         bool    push(const T& value);
         bool    pop(T &out);
-        void    copy_data(T (&dest)[N]);
+        void    copy_data(T *dest);
         size_t  size();
 
 };
@@ -40,6 +43,8 @@ bool    RingBuffer<T, N>::push(const T& value)
 template <typename T, size_t N>
 RingBuffer<T, N>::RingBuffer()
 {
+    data = (T*)ps_malloc(sizeof(T) * N);
+    is_valid = (data != nullptr);
     mutex = xSemaphoreCreateMutex();
 }
 
@@ -59,7 +64,7 @@ template <typename T, size_t N>
 size_t    RingBuffer<T, N>::size() { return N; }
 
 template <typename T, size_t N>
-void    RingBuffer<T, N>::copy_data(T (&dest)[N])
+void    RingBuffer<T, N>::copy_data(T *dest)
 {
     xSemaphoreTake(mutex, portMAX_DELAY);
     for (size_t i = 0; i < N; i++) {
