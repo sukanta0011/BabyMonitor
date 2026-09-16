@@ -49,6 +49,14 @@ static const char *_STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %
 httpd_handle_t stream_httpd = NULL;
 httpd_handle_t camera_httpd = NULL;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+uint8_t temprature_sens_read();
+#ifdef __cplusplus
+}
+#endif
+
 typedef struct {
   size_t size;   //number of values used for filtering
   size_t index;  //current value index
@@ -71,6 +79,15 @@ static ra_filter_t *ra_filter_init(ra_filter_t *filter, size_t sample_size) {
   filter->size = sample_size;
   return filter;
 }
+
+
+// float get_esp32_temp() {
+//     // Converts raw internal register reading to Fahrenheit, then to Celsius
+//     int raw = temprature_sens_read();
+//     float temp_c = (raw - 32) / 1.8;
+//     return temp_c;
+// }
+
 
 #if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_INFO
 static int ra_filter_run(ra_filter_t *filter, int value) {
@@ -291,6 +308,7 @@ static esp_err_t stream_handler(httpd_req_t *req) {
       "MJPG: %" PRIu32 "B %" PRId32 "ms (%.1ffps), AVG: %" PRIu32 "ms (%.1ffps)", (uint32_t)_jpg_buf_len, (int32_t)frame_time, 1000.0 / frame_time,
       avg_frame_time, 1000.0 / avg_frame_time
     );
+    vTaskDelay(50); // Adding small delay to reduce CPU load
   }
 
 #if defined(LED_GPIO_NUM)
@@ -672,6 +690,22 @@ static esp_err_t index_handler(httpd_req_t *req) {
   }
 }
 
+static esp_err_t temperature_handler(httpd_req_t *req)
+{
+    int raw = temprature_sens_read();
+    float temp_c = (raw - 32) / 1.8;
+
+    // Format response payload
+    char resp[64];
+    int len = snprintf(resp, sizeof(resp), "{\"temperature_c\": %.1f}\n", temp_c);
+
+    // Set MIME type and optional CORS headers
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+    return httpd_resp_send(req, resp, len);
+}
+
 void startCameraServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.max_uri_handlers = 16;
@@ -819,6 +853,13 @@ void startCameraServer() {
 #endif
   };
 
+  httpd_uri_t temperature_uri = {
+    .uri       = "/temperature",
+    .method    = HTTP_GET,
+    .handler   = temperature_handler,
+    .user_ctx  = NULL
+  };
+
   ra_filter_init(&ra_filter, 20);
 
   log_i("Starting web server on port: '%u'", config.server_port);
@@ -834,6 +875,7 @@ void startCameraServer() {
     httpd_register_uri_handler(camera_httpd, &greg_uri);
     httpd_register_uri_handler(camera_httpd, &pll_uri);
     httpd_register_uri_handler(camera_httpd, &win_uri);
+    httpd_register_uri_handler(camera_httpd, &temperature_uri);
   }
 
   config.server_port += 1;

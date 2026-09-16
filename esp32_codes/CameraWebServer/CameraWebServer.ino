@@ -8,12 +8,20 @@
 // ===========================
 #include "board_config.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+uint8_t temprature_sens_read(); // Note the historic spelling in the Espressif ROM
+#ifdef __cplusplus
+}
+#endif
+
 // ===========================
 // Enter your WiFi credentials
 // ===========================
 const char* ssid = "TP-Link_509A";
-const char* password = "******";
-const char* mdnsName = "esp32_cam1";
+const char* password = "84710574";
+const char* mdnsName = "esp32_cam2";
 
 void startCameraServer();
 void setupLedFlash();
@@ -26,6 +34,13 @@ void start_mdns() {
   }
   MDNS.addService("http", "tcp", 80);
   Serial.println("mDNS started: http://" + String(mdnsName) + ".local");
+}
+
+float get_esp32_temp() {
+    // Converts raw internal register reading to Fahrenheit, then to Celsius
+    int raw = temprature_sens_read();
+    float temp_c = (raw - 32) / 1.8;
+    return temp_c;
 }
 
 
@@ -54,19 +69,19 @@ void setup() {
   config.pin_pwdn = PWDN_GPIO_NUM;
   config.pin_reset = RESET_GPIO_NUM;
   config.xclk_freq_hz = 5000000;
-  config.frame_size = FRAMESIZE_VGA;
+  config.frame_size = FRAMESIZE_HD;
   config.pixel_format = PIXFORMAT_JPEG;  // for streaming
   //config.pixel_format = PIXFORMAT_RGB565; // for face detection/recognition
   config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
   config.fb_location = CAMERA_FB_IN_PSRAM;
-  config.jpeg_quality = 13;
+  config.jpeg_quality = 12;
   config.fb_count = 1;
 
   // if PSRAM IC present, init with UXGA resolution and higher JPEG quality
   //                      for larger pre-allocated frame buffer.
   if (config.pixel_format == PIXFORMAT_JPEG) {
     if (psramFound()) {
-      config.jpeg_quality = 10;
+      config.jpeg_quality = 12;
       config.fb_count = 2;
       config.grab_mode = CAMERA_GRAB_LATEST;
     } else {
@@ -137,10 +152,11 @@ void setup() {
   Serial.print(WiFi.localIP());
   Serial.println("' to connect");
 
-  start_mdns()
+  start_mdns();
 }
 
 void loop() {
   // Do nothing. Everything is done in another task by the web server
-  delay(10000);
+  Serial.println(get_esp32_temp());
+  delay(20000);
 }

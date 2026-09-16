@@ -44,7 +44,7 @@ template <typename T, size_t N>
 RingBuffer<T, N>::RingBuffer()
 {
     data = (T*)ps_malloc(sizeof(T) * N);
-    is_valid = (data != nullptr);
+    valid = (data != nullptr);
     mutex = xSemaphoreCreateMutex();
 }
 
