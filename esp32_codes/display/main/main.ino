@@ -59,6 +59,8 @@ char outdoor_city[24] = "";
 float outdoor_temp = 0, outdoor_humidity = 0;
 bool outdoor_valid = false;
 
+uint16_t src_img_w, src_img_h;
+float scale_factor = 1.0;
 
 enum     DisplayMode { CAM1, CAM2, SENSORS, MODE_COUNT };
 volatile DisplayMode requested_mode = CAM1;
@@ -70,6 +72,7 @@ struct  task_status
     bool    display_task = false;
     bool    sensor_task = false;
 };
+
 
 task_status taskStatus;
 
@@ -100,28 +103,77 @@ void    read_from_stream(uint32_t max_read=buffer_size)
     }
 }
 
-bool jpeg_output_callback(
-    int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap)
+
+bool jpeg_output_callback(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap)
 {
-    gfx->draw16bitRGBBitmap(x, y, bitmap, w, h);
-    return true;  // true = keep decoding, false = abort
+    static uint16_t scaled_block[32 * 32];
+
+    int16_t dst_x = (int16_t)round(x * scale_factor);
+    int16_t dst_x_end = (int16_t)round((x + w) * scale_factor);
+    int16_t dst_w = dst_x_end - dst_x;
+
+    int16_t dst_y = (int16_t)round(y * scale_factor);
+    int16_t dst_y_end = (int16_t)round((y + h) * scale_factor);
+    int16_t dst_h = dst_y_end - dst_y;
+
+    if (dst_w <= 0 || dst_h <= 0) return true;  // block scales to nothing, skip
+
+    for (int16_t j = 0; j < dst_h; j++)
+    {
+        int16_t src_j = min((int16_t)(j / scale_factor), (int16_t)(h - 1));
+        for (int16_t i = 0; i < dst_w; i++)
+        {
+            int16_t src_i = min((int16_t)(i / scale_factor), (int16_t)(w - 1));
+            scaled_block[j * dst_w + i] = bitmap[src_j * w + src_i];
+        }
+    }
+
+    gfx->draw16bitRGBBitmap(dst_x, dst_y, scaled_block, dst_w, dst_h);
+    return true;
 }
+
 
 void setup_decoder()
 {
-    TJpgDec.setJpgScale(2);  // decode at 1/2 scale
+    TJpgDec.setJpgScale(1);  // decode at 1/2 scale
     TJpgDec.setCallback(jpeg_output_callback);
 }
 
 
 void decode_and_display(uint8_t *frame, uint32_t frame_size)
 {
-    if (frame_size < buffer_size)
+    if (frame_size >= buffer_size) return;
+
+    if (TJpgDec.getJpgSize(&src_img_w, &src_img_h, frame, frame_size) != JDR_OK)
     {
-        TJpgDec.drawJpg(0, 0, frame, frame_size);
+        return;  // couldn't determine size, skip this frame
     }
+
+    float ratio_w = (float)src_img_w / 480.0;
+    float ratio_h = (float)src_img_h / 320.0;
+    scale_factor = 1.0 / max(ratio_w, ratio_h);  // letterbox: fit entirely inside
+
+    TJpgDec.drawJpg(0, 0, frame, frame_size);
 }
 
+
+void    downsample_block(uint16_t* src, int16_t src_w, int16_t src_h,
+                       uint16_t* dst, int16_t dst_w, int16_t dst_h)
+{
+    for (int16_t j = 0; j < dst_h; j++)
+    {
+        int16_t j_new = (j * 3) / 2;
+        if (j_new >= src_h) j_new = src_h - 1;  // guard against overrun
+
+        for (int16_t i = 0; i < dst_w; i++)
+        {
+            int16_t i_new = (i * 3) / 2;
+            if (i_new >= src_w) i_new = src_w - 1;
+
+            dst[j * dst_w + i] = src[j_new * src_w + i_new];
+        }
+    }
+}
 
 bool    extract_frame(
     uint8_t *data, const uint32_t size, uint32_t &start, uint32_t &end)
@@ -229,6 +281,7 @@ void draw_sensor_panel()
     }
 }
 
+
 void    read_task(void *parameter)
 {
     // Serial.print("read_task running on core: ");
@@ -259,6 +312,7 @@ void    extract_and_display_task(void *parameter)
     }
 }
 
+
 void sensor_task(void *parameter)
 {
     // Serial.print("sensor_task running on core: ");
@@ -274,19 +328,6 @@ void sensor_task(void *parameter)
 
 void    start_live_stream()
 {
-
-    // http.begin("http://pi5.local:8000/video/cam1");
-    // httpCode = http.GET();
-    // if (httpCode == 200)
-    // {
-    //     stream = http.getStreamPtr();
-    // }
-    // else
-    // {
-    //     Serial.println("Unable to connect to Pi5");
-    // }
-
-    
     if (!taskStatus.read_task)
     {
         xTaskCreate(read_task, "ReadTask", 8192, NULL, 1, &readTaskHandle);
@@ -303,12 +344,13 @@ void    start_live_stream()
     else { vTaskResume(extractAndDisplayTask); }
 }
 
+
 void    stop_live_stream()
 {
     if (taskStatus.display_task)
     { vTaskSuspend(extractAndDisplayTask); }
     if (taskStatus.read_task)
-    { vTaskSuspend(readTaskHandle);}
+    { vTaskSuspend(readTaskHandle); }
     http.end();
 }
 
@@ -348,17 +390,13 @@ void fetch_sensors()
 
             draw_sensor_panel();
         }
-        else
-        {
-            Serial.println("JSON parse error....");
-        }
+        else { Serial.println("JSON parse error...."); }
     }
     else
     {
         Serial.print("HTTP GET failed, code: ");
         Serial.println(httpCode);
     }
-
     http.end();
 }
 
@@ -373,16 +411,19 @@ void    start_sensor_stream()
     else { vTaskResume(sensorTaskHandler); }
 }
 
+
 void    stop_sensor_stream()
 {
     vTaskSuspend(sensorTaskHandler);
 }
 
-void switch_to_mode(DisplayMode mode)
+
+void    switch_to_mode(DisplayMode mode)
 {
     if (mode == SENSORS)
     {
         stop_live_stream();
+        gfx->fillScreen(0);
         current_mode = mode;
         start_sensor_stream();
     }
@@ -390,6 +431,7 @@ void switch_to_mode(DisplayMode mode)
     {
         if (taskStatus.sensor_task)
         { stop_sensor_stream(); }
+        gfx->fillScreen(0);
         http.begin(mode == CAM1 ? "http://pi5.local:8000/video/cam1"
                                   : "http://pi5.local:8000/video/cam2");
         httpCode = http.GET();
@@ -406,8 +448,7 @@ void switch_to_mode(DisplayMode mode)
 }
 
 
-
-void setup()
+void    setup()
 {
     Serial.begin(115200);
     // start_sensor_stream();
@@ -416,8 +457,7 @@ void setup()
     attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), button_isr, FALLING);
     if (!connect_to_wifi()) { return; }
     if (!gfx->begin()) { Serial.println("gfx->begin() failed!"); }
-    else { gfx->fillScreen(0); }
-
+    // else { gfx->fillScreen(0); }
     switch_to_mode(requested_mode);
 }
 
