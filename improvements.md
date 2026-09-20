@@ -98,3 +98,107 @@ workaround for the gap, not a fix for it.
 
 **Deferred to V2/V3**: fine-tuning or sourcing a face detector trained on
 infant sleeping poses.
+
+---
+ 
+## Building a standalone MJPEG display client on ESP32-S3, from scratch
+ 
+Wanted a physical, always-on display that shows the live video feed and
+sensor data with no phone or laptop involved. This turned into a genuine
+embedded-systems build: parsing a live network stream by hand, a custom
+fixed-size data structure, real dual-core concurrency, and more than one
+race condition found and fixed the hard way.
+ 
+### Parsing MJPEG-over-chunked-HTTP by hand
+ 
+`HTTPClient::getStreamPtr()` hands back a raw, continuously-open
+`WiFiClient` — nothing decodes the multipart boundaries or the underlying
+HTTP chunked-transfer-encoding for you, unlike `requests`/`aiohttp` on the
+Python side, which do this transparently. Built a small state machine:
+accumulate incoming bytes into a buffer, search for the `--frame\r\n`
+boundary marker, treat everything between two consecutive markers as one
+complete JPEG frame.
+ 
+**Bug found via raw byte-dump diagnostics**: chunked-transfer-encoding
+prefixes (`1856\r\n`-style hex length headers) sit *between* the boundary
+marker and the JPEG payload — invisible on the Python side, since
+`requests` strips them automatically, but present and unhandled on the raw
+socket read. Confirmed by printing the actual incoming bytes as raw
+integers rather than trusting assumptions about the wire format.
+ 
+### Ring buffer, sized against a moving target
+ 
+Built a templated, generic `RingBuffer<T, N>` (fixed-size, FIFO, tested
+independently with Catch2 on the host before ever touching hardware) to
+hold incoming bytes without unbounded growth. Its correct size turned out
+to depend on a fact that wasn't static: JPEG frame size varies
+significantly with lighting and scene detail — a dark nighttime frame
+compresses far more than a bright, detailed daytime one, confirmed via a
+standalone quality/size test script run against the same camera at
+different times of day. Sizing the buffer against a single measured frame
+size was sizing against a moving target; the real fix was capping the
+*source* encoding, not chasing an ever-larger buffer.
+ 
+**Bug found via a from-scratch minimal reproduction**: reading a whole
+network burst before ever checking for a complete frame let the ring
+buffer's own (correct, working-as-designed) eviction-when-full behavior
+silently destroy a still-needed frame's boundary marker before it was
+ever searched for — not a race condition, a pure sequencing bug, isolated
+and proven with a tiny standalone C++ demo (a hardcoded byte string, no
+networking) before touching the real firmware. Fixed by interleaving
+read-and-extract, checking for a complete frame after every small chunk
+rather than after a whole burst.
+ 
+### Dual-core FreeRTOS, and the races that came with it
+ 
+Split network reading, JPEG decode/display, and sensor polling into three
+separate FreeRTOS tasks, confirmed genuinely running on separate physical
+cores via `xPortGetCoreID()`. This surfaced real concurrency problems that
+single-threaded code never hits:
+ 
+- **Reused `HTTPClient` object, touched from two tasks** — caused a hard
+  crash (`assert failed: xQueueSemaphoreTake`) the first time a shared
+  client was used for both the continuous video stream and a one-off
+  sensor request from a different task. Fixed by giving sensors,
+  camera 1, and camera 2 each their own dedicated `HTTPClient`.
+- **Same failure resurfaced switching between CAM1 and CAM2** — traced to
+  a genuine copy-paste bug (a duplicated `if (mode == CAM1)` guard meaning
+  CAM2's connection logic never ran at all) compounding the shared-object
+  risk; fixing the condition and keeping the per-camera client split
+  resolved it.
+- **HTTP keep-alive vs. server-side idle timeout** — sensor polling
+  failed with `HTTPC_ERROR_SEND_HEADER_FAILED` on a strict, alternating
+  every-other-request pattern; the server was closing the idle
+  keep-alive connection between 10-second polls, and the client's default
+  connection reuse tried to send on an already-dead socket. Fixed with
+  `setReuse(false)`, forcing a fresh connection per request.
+- **`xSemaphoreTake` on an uninitialized handle** — the exact same class
+  of bug hit twice tonight, once on the sensor mutex and once earlier on
+  a different ESP32 firmware months ago: a `SemaphoreHandle_t` used
+  before `xSemaphoreCreateMutex()` had actually run.
+### Letterboxed scaling, written from scratch, block by block
+ 
+`TJpgDec` only offers fixed power-of-two scale factors — none of which
+land cleanly on a 320×480 target from a 640×480 source. Rather than
+buffer a full decoded frame (expensive, and reintroduces the moving-
+target sizing problem), the scale factor is computed **dynamically per
+frame** via `getJpgSize()`, and each small decoded block is scaled and
+repositioned individually inside the decoder's own per-block callback —
+no full-frame buffer ever held.
+ 
+**Bug found from a visibly regular artifact, not random corruption**: a
+repeating grid of thin black lines appeared between blocks. Diagnosed as
+independently-rounded position and size calculations per block drifting
+apart at every block boundary — not corruption, a systematic rounding
+gap. Fixed by deriving each block's destination width/height from the
+*difference* between two consecutive rounded boundary positions, rather
+than rounding width and position independently — guaranteeing adjacent
+blocks' edges always line up exactly.
+ 
+### Lesson, in one line
+ 
+Every one of these bugs was found the same way: reproduce it in
+isolation, look at the actual raw data (bytes, timings, core IDs) rather
+than assume, and fix the sequencing/ownership problem underneath the
+symptom rather than the symptom itself.
+ 
