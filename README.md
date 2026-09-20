@@ -10,7 +10,8 @@ embedded firmware, systems design. See [Known Limitations](#known-limitations).
 ![](https://github.com/sukanta0011/BabyMonitor/blob/main/screenshots/babymonitor_v1.gif)
 
 For the full story — why things are built this way, bugs hit and how they
-were diagnosed, load-testing numbers — see [development_journey.md](development_journey.md).
+were diagnosed, load-testing numbers — see [development_journey.md](development_journey.md)
+and [improvements.md](improvements.md).
 
 ---
 
@@ -30,6 +31,23 @@ were diagnosed, load-testing numbers — see [development_journey.md](developmen
 - Serves a lightweight FastAPI backend + phone-optimized HTML dashboard,
   accessible from any device on the local network — tested with hundreds
   of concurrent viewers with no meaningful degradation
+- **Standalone ESP32-S3 display client**: a physical, always-on 480×320
+  SPI screen that pulls the live video feed and sensor data directly from
+  the FastAPI backend and renders them with no phone or laptop involved —
+  custom MJPEG-over-chunked-HTTP parser, a fixed-size ring buffer, and
+  dual-core FreeRTOS tasks for network I/O and decode/display, written
+  from scratch (see [improvements.md](improvements.md))
+- A physical push button on the S3 client cycles between two camera feeds
+  and a live sensor panel, debounced and interrupt-driven
+- **ESP8266 sensor node has its own local ST7735 display**, showing indoor
+  readings and live outdoor weather (fetched from Open-Meteo, geolocated
+  via IP) independently of the S3 client or the Pi — the room stays
+  monitorable even if the rest of the stack is down
+- **Second physical status display on the Pi itself**: a landscape ST7735
+  dashboard showing host health (CPU, RAM, disk, load, uptime) and
+  per-container Docker status (`api`, `db`, `watchtower`) via `docker-py`
+  and raw `spidev`/`gpiod` — a glance-able "is the system actually alive"
+  readout with no laptop needed
 - Runs fully containerized via Docker Compose, deployed and verified on a
   Raspberry Pi 5, with CI (lint, type-check, cross-architecture Docker
   builds) on every push, and Watchtower auto-pulling new images on the Pi
@@ -44,12 +62,13 @@ ESP32-CAM #1 ─┐
               ├─ WiFi/HTTP ─┐
 ESP32-CAM #2 ─┘             │
                              │
-ESP32 sensor node ─ HTTP ────┤
- (BH1750 + SCD40)            │
-                             ▼
-                  ┌─────────────────────────┐
-                  │   FastAPI (Docker, Pi)   │
-                  │  ├─ CameraStream(s)      │
+ESP32 sensor node ─ HTTP ────┤        ESP32-S3 display client
+ (BH1750 + SCD40,            │        (480x320 SPI, button-switched
+  local ST7735 + weather)    │         CAM1/CAM2/Sensors, custom
+                             ▼         MJPEG parser + ring buffer)
+                  ┌─────────────────────────┐        ▲
+                  │   FastAPI (Docker, Pi)   │────────┘
+                  │  ├─ CameraStream(s)      │  /video/{cam}, /sensors
                   │  ├─ SensorStream         │
                   │  ├─ auto-discovery loops │
                   │  ├─ face detection       │
@@ -65,6 +84,7 @@ ESP32 sensor node ─ HTTP ────┤
                     Phone / laptop browser
                     (HTML dashboard, polling)
 
+Pi's own SPI status display (spidev/gpiod) ── host + Docker telemetry
 CI (GitHub Actions) ──▶ ghcr.io ──▶ Watchtower on Pi (auto-pull, restart)
 ```
 
@@ -73,19 +93,30 @@ CI (GitHub Actions) ──▶ ghcr.io ──▶ Watchtower on Pi (auto-pull, res
 ## Hardware
 
 - 2× ESP32-CAM (AI-Thinker)
-- 1× ESP32 sensor node
+- 1× ESP8266 sensor node (BH1750, SCD40) with its own ST7735 display
+- 1× ESP32-S3 — dedicated video/sensor display client, ILI9488 480×320
+  SPI TFT, one push button
 - BH1750 — light (I2C `0x23`)
 - SCD40 — CO2, temperature, humidity (I2C `0x62`)
 - BMP280 — turned out to be dead on arrival
-- Raspberry Pi 5 — production host, headless (Raspberry Pi OS Lite)
+- Raspberry Pi 5 — production host, headless (Raspberry Pi OS Lite), with
+  its own ST7735 status display wired directly to its GPIO/SPI header
 
 ## Software
 
 - **Firmware:** Arduino/C++, ESPAsyncWebServer, ArduinoJson, ESPmDNS,
   FreeRTOS mutexes, an abstract `Sensor` base class for the I2C drivers
+- **S3 display client:** custom C++ ring buffer (templated, dual-mutex —
+  `std::mutex` for host testing, `SemaphoreHandle_t` on-device), hand-
+  written chunked-transfer/multipart MJPEG parser, TJpg_Decoder with a
+  from-scratch per-block nearest-neighbor scaler for letterboxed display,
+  dual-core FreeRTOS tasks (network read / decode+display / sensor poll),
+  interrupt-driven mode switching, PSRAM-backed buffers
 - **Backend:** FastAPI, async MJPEG fan-out, SQLAlchemy (async) + Postgres,
   OpenCV, YuNet (ARM) / MediaPipe (x86, optional), `requests`, `threading`
   + `asyncio` side by side, structured JSON logging
+- **Pi status display:** Python, `spidev` + `gpiod` (direct SPI/GPIO, no
+  display library), `PIL` for rendering, `psutil` + `docker` for telemetry
 - **Frontend:** plain HTML/CSS/JS, phone-first, no framework
 - **Deploy:** Docker Compose (FastAPI + Postgres + Watchtower), running on
   Raspberry Pi 5
@@ -101,7 +132,7 @@ Cut from v1 on purpose, not forgotten:
 - **No covered-face detection** — needs a purpose-trained model, out of
   scope for v1.
 - **Face detection has real, measured blind spots on natural sleeping
-  poses** — empirically tested and confirmed (see development_journey.md);
+  poses** — empirically tested and confirmed (see improvements.md);
   scale, rotation, and contrast preprocessing were all ruled out as
   fixes. Manual per-camera viewing is the current mitigation.
 - **No check that the detected face is the baby's** — any face counts
@@ -114,24 +145,20 @@ Cut from v1 on purpose, not forgotten:
   workflow; lint and type-checking are.
 - **No database migrations (Alembic).** Currently using
   `Base.metadata.create_all()`, which only creates missing tables and
-  never alters existing ones. This makes automated deployment **unsafe
-  for any change that modifies `models.py`** — a schema change deployed
-  via the automated pipeline would update the code but leave the database
-  schema stale, breaking on the first read/write to the changed table.
-  Until Alembic is in place, schema changes are deployed manually, with
-  the migration applied by hand before the new image is allowed to run.
-  Deliberately deferred until real schema iteration starts, rather than
-  building migration tooling for a schema that's still finding its shape.
+  never alters existing ones — schema changes are deployed manually until
+  Alembic is in place (see development_journey.md).
 - **Plain HTTP, no auth** on ESP32 and dashboard endpoints — fine on a
   trusted home network only. No external/remote access is currently
   enabled (Tailscale evaluated, not yet set up).
 - **`CameraStreamManager` has grown to cover several responsibilities**
   that would benefit from being split apart.
 - **Best-camera status can go stale during a sustained no-face-detected
-  period** — the recovery loop retries until any camera clears the
-  confidence threshold, which can take a while if none currently can;
-  the displayed "face detected" status can lag reality during that
-  window. Manual per-camera selection is the workaround.
+  period** — manual per-camera selection is the workaround.
+- **S3 display client has no camera reconnect-on-failure retry** — a
+  failed connection shows a persistent error screen until the button is
+  pressed again; it does not auto-retry.
+- **Pi status display's startup/persistence across reboots not yet
+  formalized** (no systemd unit/restart policy confirmed).
 
 ---
 
@@ -150,3 +177,5 @@ Cut from v1 on purpose, not forgotten:
 - API key auth, HTTPS via a reverse proxy
 - Data retention/downsampling policy once volume warrants it
 - Two-way audio (dedicated ESP32, not layered onto the camera boards)
+- systemd unit + restart policy for the Pi status display
+- Auto-retry/reconnect on the S3 display client's camera connection
