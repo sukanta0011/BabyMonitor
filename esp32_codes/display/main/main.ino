@@ -7,19 +7,19 @@
 #include "ringBuffer.hpp"
 
 
-// Pin Definitions for ESP32-S3-CAM
-#define TFT_MOSI 17
-#define TFT_SCLK 18
-#define TFT_CS    3
-#define TFT_DC   15
-#define TFT_RST  16
-
-// // Pin Definitions for ESP32-S3-dev-kit
+// // Pin Definitions for ESP32-S3-CAM
 // #define TFT_MOSI 17
 // #define TFT_SCLK 18
 // #define TFT_CS    3
 // #define TFT_DC   15
 // #define TFT_RST  16
+
+// Pin Definitions for ESP32-S3-dev-kit
+#define TFT_MOSI 11
+#define TFT_SCLK 12
+#define TFT_CS   10
+#define TFT_DC   15
+#define TFT_RST  16
 
 // Interrupt Button
 #define BUTTON_PIN 9
@@ -37,7 +37,9 @@
 const uint32_t                      buffer_size = 102400;
 uint32_t                            start = 0, end = 0;
 std::string                         marker = "--frame\r\n";
-HTTPClient                          http;
+HTTPClient                          cam1Http, cam2Http, sensorHttp;
+WiFiClient                          *cam1Stream, *cam2Stream;
+// HTTPClient                          *activeHttp;
 WiFiClient                          *stream;
 int                                 httpCode;
 RingBuffer<uint8_t, buffer_size>    buffer;
@@ -52,8 +54,7 @@ TaskHandle_t    readTaskHandle, extractAndDisplayTask, sensorTaskHandler;
 float                               lux_val = 0, temp_val = 0, humidity_val = 0;
 int                                 co2_val = 0;
 bool                                sensors_valid = false;
-SemaphoreHandle_t                   sensor_mutex = xSemaphoreCreateMutex();
-volatile bool                       button_released = false;
+SemaphoreHandle_t                   sensor_mutex;
 volatile uint32_t                   last_interrupt_time = 0;
 char outdoor_city[24] = "";
 float outdoor_temp = 0, outdoor_humidity = 0;
@@ -62,15 +63,18 @@ bool outdoor_valid = false;
 uint16_t src_img_w, src_img_h;
 float scale_factor = 1.0;
 
-enum     DisplayMode { CAM1, CAM2, SENSORS, MODE_COUNT };
-volatile DisplayMode requested_mode = CAM1;
-volatile DisplayMode current_mode = CAM1;
+enum     DisplayMode { SENSORS, CAM1, CAM2 };
+volatile DisplayMode requested_mode = SENSORS;
+volatile DisplayMode current_mode = SENSORS;
 
 struct  task_status 
 {
     bool    read_task = false;
     bool    display_task = false;
     bool    sensor_task = false;
+    bool    cam1_stream_status = false;
+    bool    cam2_stream_status = false;
+    bool    sensor_stream_status = false;
 };
 
 
@@ -81,7 +85,10 @@ void    IRAM_ATTR button_isr()
     uint32_t    now = millis();
     if (now - last_interrupt_time > 50)
     {
-        requested_mode = (DisplayMode)((requested_mode + 1) % MODE_COUNT);
+        requested_mode = (DisplayMode)((requested_mode + 1) % 3);
+        // Serial.print("ISR: ");
+        // Serial.print(current_mode);
+        // Serial.println(requested_mode);
         last_interrupt_time = now;
     }
 }
@@ -100,6 +107,16 @@ void    read_from_stream(uint32_t max_read=buffer_size)
             buffer.push(temp[i]);
             bytes_read += 1;
         }
+    }
+}
+
+
+void    flush_old_stream(WiFiClient *old_stream)
+{
+    uint8_t     temp[512];
+    while (old_stream->available())
+    {
+        size_t n = old_stream->readBytes(temp, min((size_t)stream->available(), sizeof(temp)));
     }
 }
 
@@ -157,24 +174,6 @@ void decode_and_display(uint8_t *frame, uint32_t frame_size)
 }
 
 
-void    downsample_block(uint16_t* src, int16_t src_w, int16_t src_h,
-                       uint16_t* dst, int16_t dst_w, int16_t dst_h)
-{
-    for (int16_t j = 0; j < dst_h; j++)
-    {
-        int16_t j_new = (j * 3) / 2;
-        if (j_new >= src_h) j_new = src_h - 1;  // guard against overrun
-
-        for (int16_t i = 0; i < dst_w; i++)
-        {
-            int16_t i_new = (i * 3) / 2;
-            if (i_new >= src_w) i_new = src_w - 1;
-
-            dst[j * dst_w + i] = src[j_new * src_w + i_new];
-        }
-    }
-}
-
 bool    extract_frame(
     uint8_t *data, const uint32_t size, uint32_t &start, uint32_t &end)
 {
@@ -190,8 +189,9 @@ bool    extract_frame(
 }
 
 
-void draw_sensor_panel()
+void    draw_sensor_panel()
 {
+    Serial.println("Sensor panle drawing...");
     int screen_w = 480;
     int screen_h = 320;
     int strip_h = 50;
@@ -279,6 +279,7 @@ void draw_sensor_panel()
         gfx->setCursor(x + 20, y + cell_h / 2);
         gfx->println(cells[i].value);
     }
+    Serial.println("Sensor panle drawing completed");
 }
 
 
@@ -308,7 +309,7 @@ void    extract_and_display_task(void *parameter)
         {
             decode_and_display(buffer_cpy + start, (end - start));
         }
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(5));
     }
 }
 
@@ -318,11 +319,27 @@ void sensor_task(void *parameter)
     // Serial.print("sensor_task running on core: ");
     // Serial.println(xPortGetCoreID());
 
+    Serial.println("sensor_task function");
     while (true)
     {
         fetch_sensors();
         vTaskDelay(pdMS_TO_TICKS(10000));  // 10 second interval
     }
+}
+
+
+void show_splash_screen()
+{
+    gfx->fillScreen(COLOR_BG);
+    gfx->setTextColor(0xFFFF);
+    gfx->setTextSize(3);
+    gfx->setCursor(60, 130);
+    gfx->println("Baby Monitor");
+    gfx->setTextSize(2);
+    gfx->setTextColor(0xFFFF);
+    gfx->setCursor(90, 170);
+    gfx->println("Starting up...");
+    delay(2000);
 }
 
 
@@ -347,24 +364,26 @@ void    start_live_stream()
 
 void    stop_live_stream()
 {
+    // http.end();
     if (taskStatus.display_task)
     { vTaskSuspend(extractAndDisplayTask); }
     if (taskStatus.read_task)
     { vTaskSuspend(readTaskHandle); }
-    http.end();
 }
 
 
-void fetch_sensors()
+void    fetch_sensors()
 {
     // Serial.println("sensor task running...");
-    http.begin("http://pi5.local:8000/sensors");
-    httpCode = http.GET();
+    Serial.println("fetch_sensors func");
+    sensorHttp.begin("http://pi5.local:8000/sensors");
+    sensorHttp.setReuse(false);
+    httpCode = sensorHttp.GET();
     // Serial.println(httpCode);
 
     if (httpCode == 200)
     {
-        String                  payload = http.getString();
+        String                  payload = sensorHttp.getString();
         JsonDocument            doc;
         DeserializationError    err = deserializeJson(doc, payload);
 
@@ -397,9 +416,19 @@ void fetch_sensors()
         Serial.print("HTTP GET failed, code: ");
         Serial.println(httpCode);
     }
-    http.end();
+    // vTaskDelay(pdMS_TO_TICKS(1000));
+    sensorHttp.end();
 }
 
+
+void show_error_message(const char* message)
+{
+    gfx->fillScreen(COLOR_BG);
+    gfx->setTextColor(0xF800);  // red
+    gfx->setTextSize(2);
+    gfx->setCursor(20, 150);
+    gfx->println(message);
+}
 
 void    start_sensor_stream()
 {
@@ -417,33 +446,109 @@ void    stop_sensor_stream()
     vTaskSuspend(sensorTaskHandler);
 }
 
-
-void    switch_to_mode(DisplayMode mode)
+void    flush_buffer_cpy()
 {
-    if (mode == SENSORS)
+    for (uint32_t i=0; i<=buffer_size; i++)
     {
-        stop_live_stream();
-        gfx->fillScreen(0);
-        current_mode = mode;
-        start_sensor_stream();
+        buffer_cpy[i] = 0;
     }
-    else
-    {
-        if (taskStatus.sensor_task)
-        { stop_sensor_stream(); }
-        gfx->fillScreen(0);
-        http.begin(mode == CAM1 ? "http://pi5.local:8000/video/cam1"
-                                  : "http://pi5.local:8000/video/cam2");
-        httpCode = http.GET();
-        if (httpCode == 200)
-        { stream = http.getStreamPtr(); }
-        else
-        {
-            Serial.println("Unable to connect to Pi5");
-            return;
-        }
+}
+
+void    switch_to_mode(DisplayMode mode) {
+    gfx->fillScreen(0);
+
+    if (mode == SENSORS) {
+        Serial.println("SENSORS starting...");
+        start_sensor_stream();
         current_mode = mode;
-        start_live_stream();
+        taskStatus.sensor_stream_status = true;
+        Serial.println("SENSORS started");
+        if (taskStatus.cam2_stream_status)
+        { 
+            stop_live_stream();
+            // flush_old_stream(cam2Stream);
+            cam2Http.end();
+            taskStatus.cam2_stream_status = false;
+        }
+        else if (taskStatus.cam1_stream_status)
+        { 
+            stop_live_stream();
+            cam1Http.end();
+            taskStatus.cam1_stream_status = false;
+        }
+        // return;
+    }
+    if (mode == CAM1)
+    {
+        Serial.println("CAM1 starting...");
+        cam1Http.begin("http://pi5.local:8000/video/cam1");
+        cam1Http.setReuse(false);
+
+        httpCode = cam1Http.GET();
+        if (httpCode == 200) {
+            cam1Stream = cam1Http.getStreamPtr();
+            stream = cam1Stream;
+            buffer.reset();
+            flush_buffer_cpy();
+            start_live_stream();
+            current_mode = mode;
+            taskStatus.cam1_stream_status = true;
+            if (taskStatus.sensor_stream_status) { 
+                stop_sensor_stream(); 
+                taskStatus.sensor_stream_status = false;
+            }
+            if (taskStatus.cam2_stream_status)
+            { 
+                // flush_old_stream(cam2Stream);
+                cam2Http.end(); 
+            }
+            Serial.println("CAM1 started");
+        } else {
+            Serial.print("Unable to connect to Pi5. HTTP Code: ");
+            Serial.println(httpCode);
+            cam1Http.end();
+            taskStatus.cam1_stream_status = false;
+            show_error_message("Camera unavailable");
+        }
+        
+        // return;
+    }
+    if (mode == CAM2)
+    {
+        Serial.println("CAM2 starting...");
+        // if (taskStatus.sensor_stream_status) { stop_sensor_stream(); }
+        cam2Http.begin("http://pi5.local:8000/video/cam2");
+        cam2Http.setReuse(false);
+        httpCode = cam2Http.GET();
+        if (httpCode == 200) {
+            cam2Stream = cam2Http.getStreamPtr();
+            stream = cam2Stream;
+            buffer.reset();
+            flush_buffer_cpy();
+            start_live_stream();
+            current_mode = mode;
+            taskStatus.cam2_stream_status = true;
+            if (taskStatus.sensor_stream_status) { 
+                stop_sensor_stream(); 
+                taskStatus.sensor_stream_status = false;
+            }
+            if (taskStatus.cam1_stream_status)
+            { 
+                // flush_old_stream(cam1Stream);
+                cam1Http.end(); 
+            }
+            Serial.println("CAM2 started");
+        }
+        else {
+            Serial.print("Unable to connect to Pi5. HTTP Code: ");
+            Serial.println(httpCode);
+            
+            cam2Http.end();
+            taskStatus.cam2_stream_status = false;
+            show_error_message("Camera unavailable");
+        }
+        
+        // return;
     }
 }
 
@@ -457,46 +562,21 @@ void    setup()
     attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), button_isr, FALLING);
     if (!connect_to_wifi()) { return; }
     if (!gfx->begin()) { Serial.println("gfx->begin() failed!"); }
-    // else { gfx->fillScreen(0); }
+    else {
+        gfx->fillScreen(0);
+        show_splash_screen();
+    }
+    sensor_mutex = xSemaphoreCreateMutex();
     switch_to_mode(requested_mode);
 }
 
 
 void    loop()
 {
-    // unsigned long t0 = micros();
-    // read_from_stream();
-    // unsigned long t1 = micros();
-
-    // buffer.copy_data(buffer_cpy);
-    // unsigned long t2 = micros();
-
-    // bool found = extract_frame(buffer_cpy, buffer_size, start, end);
-    // unsigned long t3 = micros();
-
-    // if (found)
-    // {
-    //     decode_and_display(buffer_cpy + start, (end - start));
-    // }
-    // unsigned long t4 = micros();
-
-    // Serial.print("read: ");
-    // Serial.print(t1 - t0);
-    // Serial.print("us | copy: ");
-    // Serial.print(t2 - t1);
-    // Serial.print("us | search: ");
-    // Serial.print(t3 - t2);
-    // Serial.print("us | decode+draw: ");
-    // Serial.print(t4 - t3);
-    // Serial.print("us | found: ");
-    // Serial.print(found);
-    // Serial.print(" | Size: ");
-    // Serial.println(end - start);
-
     if (current_mode != requested_mode)
     {
         switch_to_mode(requested_mode);
-        Serial.println(requested_mode);
+        // Serial.println(requested_mode);
     }
-    delay(100);
+    delay(10);
 }

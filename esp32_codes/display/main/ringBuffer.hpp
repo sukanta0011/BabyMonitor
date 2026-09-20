@@ -24,6 +24,7 @@ class RingBuffer
         bool    push(const T& value);
         bool    pop(T &out);
         void    copy_data(T *dest);
+        void    reset();
         size_t  size();
 
 };
@@ -62,6 +63,14 @@ bool    RingBuffer<T, N>::pop(T &out)
 
 template <typename T, size_t N>
 size_t    RingBuffer<T, N>::size() { return N; }
+
+template <typename T, size_t N>
+void    RingBuffer<T, N>::reset()
+{
+    head = 0;
+    tail = 0;
+    count = 0;
+}
 
 template <typename T, size_t N>
 void    RingBuffer<T, N>::copy_data(T *dest)

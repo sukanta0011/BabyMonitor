@@ -112,7 +112,7 @@ void setup() {
   sensor_t *s = esp_camera_sensor_get();
   // initial sensors are flipped vertically and colors are a bit saturated
   if (s->id.PID == OV3660_PID) {
-    s->set_vflip(s, 1);        // flip it back
+    // s->set_vflip(s, 1);        // flip it back
     s->set_brightness(s, 1);   // up the brightness just a bit
     s->set_saturation(s, -2);  // lower the saturation
   }
@@ -136,7 +136,7 @@ void setup() {
 #endif
 
   WiFi.begin(ssid, password);
-  WiFi.setSleep(false);
+  // WiFi.setSleep(false);
 
   Serial.print("WiFi connecting");
   while (WiFi.status() != WL_CONNECTED) {
@@ -151,12 +151,14 @@ void setup() {
   Serial.print("Camera Ready! Use 'http://");
   Serial.print(WiFi.localIP());
   Serial.println("' to connect");
+  s->set_vflip(s, 1);
 
-  start_mdns();
+  // start_mdns();
 }
 
 void loop() {
   // Do nothing. Everything is done in another task by the web server
-  Serial.println(get_esp32_temp());
-  delay(20000);
+  // Serial.println(get_esp32_temp());
+  // vTaskDelay(pdMS_TO_TICKS(5000));
+  delay(50000);
 }
