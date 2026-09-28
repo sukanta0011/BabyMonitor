@@ -706,6 +706,37 @@ static esp_err_t temperature_handler(httpd_req_t *req)
     return httpd_resp_send(req, resp, len);
 }
 
+static esp_err_t set_ir_intensity(httpd_req_t *req)
+{
+    char query[32];
+    char param[8];
+
+    if (httpd_req_get_url_query_len(req) + 1 > sizeof(query))
+    {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Query too long");
+        return ESP_FAIL;
+    }
+    if (httpd_req_get_url_query_str(req, query, sizeof(query))!= ESP_OK)
+    {
+      httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing query");
+      return ESP_FAIL;
+    }
+    if (httpd_query_key_value(query, "intensity", param, sizeof(param)) != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing intensity param");
+        return ESP_FAIL;
+    }
+
+    int intensity = atoi(param);
+    if (intensity < 0) intensity = 0;
+    if (intensity > 255) intensity = 255;
+
+    ledcWrite(IR_GPIO_NUM, intensity);
+    Serial.printf("set intensity: %d\n", intensity);
+    httpd_resp_set_type(req, "text/plain");
+    // Serial.println(req->uri);
+    return httpd_resp_send(req, "ok", 2);
+}
+
 void startCameraServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.max_uri_handlers = 16;
@@ -860,6 +891,13 @@ void startCameraServer() {
     .user_ctx  = NULL
   };
 
+  httpd_uri_t ir_uri = {
+    .uri       = "/ir",
+    .method    = HTTP_GET,
+    .handler   = set_ir_intensity,
+    .user_ctx  = NULL
+  };
+
   ra_filter_init(&ra_filter, 20);
 
   log_i("Starting web server on port: '%u'", config.server_port);
@@ -876,6 +914,7 @@ void startCameraServer() {
     httpd_register_uri_handler(camera_httpd, &pll_uri);
     httpd_register_uri_handler(camera_httpd, &win_uri);
     httpd_register_uri_handler(camera_httpd, &temperature_uri);
+    httpd_register_uri_handler(camera_httpd, &ir_uri);
   }
 
   config.server_port += 1;
@@ -891,5 +930,13 @@ void setupLedFlash() {
   ledcAttach(LED_GPIO_NUM, 5000, 8);
 #else
   log_i("LED flash is disabled -> LED_GPIO_NUM undefined");
+#endif
+}
+
+void  setupIR(){
+#if defined(IR_GPIO_NUM)
+  ledcAttach(IR_GPIO_NUM, 5000, 8);
+#else
+  log_i("IR is disabled -> IR_GPIO_NUM undefined");
 #endif
 }

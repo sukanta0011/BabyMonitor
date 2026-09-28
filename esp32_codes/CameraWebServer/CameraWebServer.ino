@@ -25,6 +25,7 @@ const char* mdnsName = "esp32_cam2";
 
 void startCameraServer();
 void setupLedFlash();
+void setupIR();
 
 
 void start_mdns() {
@@ -92,15 +93,15 @@ void setup() {
   } else {
     // Best option for face detection/recognition
     config.frame_size = FRAMESIZE_240X240;
-#if CONFIG_IDF_TARGET_ESP32S3
-    config.fb_count = 2;
-#endif
+  #if CONFIG_IDF_TARGET_ESP32S3
+      config.fb_count = 2;
+  #endif
   }
 
-#if defined(CAMERA_MODEL_ESP_EYE)
-  pinMode(13, INPUT_PULLUP);
-  pinMode(14, INPUT_PULLUP);
-#endif
+  #if defined(CAMERA_MODEL_ESP_EYE)
+    pinMode(13, INPUT_PULLUP);
+    pinMode(14, INPUT_PULLUP);
+  #endif
 
   // camera init
   esp_err_t err = esp_camera_init(&config);
@@ -121,19 +122,24 @@ void setup() {
     s->set_framesize(s, FRAMESIZE_VGA);
   }
 
-#if defined(CAMERA_MODEL_M5STACK_WIDE) || defined(CAMERA_MODEL_M5STACK_ESP32CAM)
-  s->set_vflip(s, 1);
-  s->set_hmirror(s, 1);
-#endif
+  #if defined(CAMERA_MODEL_M5STACK_WIDE) || defined(CAMERA_MODEL_M5STACK_ESP32CAM)
+    s->set_vflip(s, 1);
+    s->set_hmirror(s, 1);
+  #endif
 
-#if defined(CAMERA_MODEL_ESP32S3_EYE)
-  s->set_vflip(s, 1);
-#endif
+  #if defined(CAMERA_MODEL_ESP32S3_EYE)
+    s->set_vflip(s, 1);
+  #endif
 
-// Setup LED FLash if LED pin is defined in camera_pins.h
-#if defined(LED_GPIO_NUM)
-  setupLedFlash();
-#endif
+  // Setup LED FLash if LED pin is defined in camera_pins.h
+  #if defined(LED_GPIO_NUM)
+    setupLedFlash();
+  #endif
+
+  // Setup IR light if IP pin is defined in camera_pins.h
+  #if defined(IR_GPIO_NUM)
+    setupIR();
+  #endif
 
   WiFi.begin(ssid, password);
   // WiFi.setSleep(false);
@@ -154,7 +160,6 @@ void setup() {
   s->set_vflip(s, 1);
 
   // start_mdns();
-
 }
 
 void loop() {
