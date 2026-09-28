@@ -3,6 +3,9 @@ from fastapi.responses import StreamingResponse, JSONResponse
 import cv2
 from typing import Dict
 import asyncio
+import httpx
+from urllib.parse import urlparse
+from fastapi import Path
 from ..global_variables import SHUTDOWN_EVENT, CAMERAS, SENSOR
 # from src.main import SENSOR
 from ..backend.face_detector import YuNetDetector
@@ -154,3 +157,73 @@ async def get_camera_view(
         generate_camera_frame(camera),
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
+
+
+def resolve_camera_host(camera_name: str):
+    """Returns (host, None) on success, or (None, JSONResponse) on failure."""
+    camera = next((c for c in CAMERAS if c.name == camera_name), None)
+    if camera is None:
+        return None, JSONResponse(
+            status_code=404, content={"error": "camera not found"})
+    with camera.lock:
+        online = camera.is_active
+    if not online:
+        return None, JSONResponse(
+            status_code=503, content={"error": "camera offline"})
+    host = urlparse(camera.ip).hostname
+    if host is None:
+        return None, JSONResponse(
+            status_code=400, content={"error": "no network address"})
+    return host, None
+
+
+async def call_camera_ir(host: str, params: dict | None = None):
+    """Returns (response, None) or (None, JSONResponse)."""
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"http://{host}/ir", params=params)
+    except httpx.TimeoutException:
+        return None, JSONResponse(
+            status_code=504, content={"error": "camera timed out"})
+    except httpx.RequestError:
+        return None, JSONResponse(
+            status_code=502, content={"error": "camera unreachable"})
+    if resp.status_code != 200:
+        return None, JSONResponse(
+            status_code=502, content={"error": "camera rejected request"})
+    return resp, None
+
+
+@app.post("/ir/{camera_name}/{intensity}")
+async def set_ir_intensity(
+    camera_name: str,
+    intensity: int = Path(ge=0, le=255),
+):
+    host, err = resolve_camera_host(camera_name)
+    if host is None:
+        return err
+
+    resp, err = await call_camera_ir(
+        host=host, params={"intensity": intensity})
+    if err:
+        return err
+
+    return JSONResponse(
+        content={"camera": camera_name, "intensity": intensity})
+
+
+@app.get("/ir/{camera_name}")
+async def get_ir_intensity(camera_name: str):
+    host, err = resolve_camera_host(camera_name)
+    if err:
+        return err
+    resp, err = await call_camera_ir(host)
+    if err:
+        return err
+    try:
+        level = int(resp.json()["intensity"])
+    except (ValueError, KeyError, TypeError):
+        return JSONResponse(
+            status_code=502, content={"error": "bad reply from camera"})
+    return JSONResponse(
+        content={"camera": camera_name, "intensity": level})

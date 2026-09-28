@@ -1,8 +1,9 @@
 import cv2
-import numpy as np
+# import numpy as np
 import time
 
-INPUT_PATH = "/home/sukanta/42Prague/SideProject/BabyMonitor/test_frames/night_vision_frame.png"
+INPUT_PATH = ("/home/sukanta/42Prague/SideProject/"
+             "BabyMonitor/test_frames/night_vision_frame.png")
 OUTPUT_PATH = "frame_enhanced_v3.jpg"
 
 def enhance_low_light_contrast(frame):
@@ -18,12 +19,14 @@ def enhance_low_light_contrast(frame):
     # Often ESP32 night frames only occupy values between 20 and 110.
     min_val, max_val, _, _ = cv2.minMaxLoc(gray)
     if max_val - min_val > 10:
-        stretched = cv2.normalize(gray, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+        stretched = cv2.normalize(
+            gray, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
     else:
         stretched = gray
 
     # 3. Two-Tier CLAHE
-    # First pass: large tile size for global light balance (fixes the hot IR spot on the left)
+    # First pass: large tile size for
+    # global light balance (fixes the hot IR spot on the left)
     clahe_broad = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16, 16))
     broad_eq = clahe_broad.apply(stretched)
 

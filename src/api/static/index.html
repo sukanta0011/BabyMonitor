@@ -107,6 +107,15 @@
     border: 1px solid #2a2d33;
     color: #aaa;
   }
+
+  .ir-control { background:#1a1c20; border:1px solid #2a2d33; border-radius:14px;
+              padding:14px 16px; margin-bottom:18px; }
+  .ir-control .label { font-size:12.5px; color:#8b8d93; font-weight:500;
+                      display:flex; justify-content:space-between; margin-bottom:8px; }
+  .ir-control input[type=range] { width:100%; }
+  .ir-control input[type=range]:disabled { opacity:0.4; }
+  .ir-status { font-size:12px; color:#f5847c; min-height:14px; margin-top:6px; }
+
   .status.normal  { background: rgba(52,209,124,0.1);  border-color: rgba(52,209,124,0.25);  color: #6fe3a4; }
   .status.warning { background: rgba(245,185,66,0.1);  border-color: rgba(245,185,66,0.25);  color: #f5c66b; }
   .status.error   { background: rgba(240,72,62,0.1);   border-color: rgba(240,72,62,0.25);   color: #f5847c; }
@@ -176,6 +185,12 @@
 
 <div id="status" class="status">Connecting…</div>
 
+<div class="ir-control">
+  <div class="label"><span>IR light</span><span id="ir-value">0</span></div>
+  <input type="range" id="ir-slider" min="0" max="255" value="0" disabled>
+  <div id="ir-status" class="ir-status"></div>
+</div>
+
 <div class="sensors">
   <div class="sensor-box">
     <div class="label">Light</div>
@@ -207,9 +222,16 @@ let startDistance = 0;
 let startX = 0, startY = 0;
 let lastTouchX = 0, lastTouchY = 0;
 let isPanning = false;
+let lastBestName = null;
+let irCamera = null;
+let irWasOnline = false;
 
 const videoEl = document.getElementById("video");
 const wrapEl = document.getElementById("video-wrap");
+
+const irSlider = document.getElementById("ir-slider");
+const irValue  = document.getElementById("ir-value");
+const irStatus = document.getElementById("ir-status");
 
 function getDistance(touches) {
   const dx = touches[0].clientX - touches[1].clientX;
@@ -290,6 +312,7 @@ async function pollFrameInfo() {
   try {
     const res = await fetch("/frame_info");
     const data = await res.json();
+    lastBestName = data.name;
     const status = data.status || "unknown";
     const statusEl = document.getElementById("status");
     statusEl.className = "status " + status;
@@ -320,6 +343,54 @@ async function pollSensors() {
     console.error("sensors poll failed", e);
   }
 }
+
+function effectiveCamera() {
+  return selectedTarget === "best" ? lastBestName : selectedTarget;
+}
+
+async function loadIrFromCamera(name) {
+  try {
+    const res = await fetch(`/ir/${encodeURIComponent(name)}`);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    irSlider.value = data.intensity;
+    irValue.textContent = data.intensity;
+    irStatus.textContent = "";
+  } catch (e) {
+    irStatus.textContent = "Couldn't read IR level";
+  }
+}
+
+// call at the end of pollCameras(), passing the parsed camera list
+function syncIrSlider(cameras) {
+  const name = effectiveCamera();
+  const cam = cameras.find(c => c.name === name);
+  const online = !!(cam && cam.state);
+  irSlider.disabled = !online;
+  if (!online) {
+    irStatus.textContent = name ? "Camera offline" : "No camera selected";
+  } else if (name !== irCamera || !irWasOnline) {
+    irCamera = name;
+    loadIrFromCamera(name);   // re-read on camera change or offline→online
+  }
+  irWasOnline = online;
+}
+
+irSlider.addEventListener("input", () => { irValue.textContent = irSlider.value; });
+
+irSlider.addEventListener("change", async () => {   // fires on release, not on every drag tick
+  const name = irCamera;
+  if (!name) return;
+  try {
+    const res = await fetch(
+      `/ir/${encodeURIComponent(name)}/${irSlider.value}`, { method: "POST" });
+    if (!res.ok) throw new Error(res.status);
+    irStatus.textContent = "";
+  } catch (e) {
+    irStatus.textContent = "Failed to set IR level";
+    loadIrFromCamera(name);   // snap back to what the camera actually holds
+  }
+});
 
 async function pollCameras() {
   try {
@@ -363,6 +434,7 @@ async function pollCameras() {
     });
 
     applyActivePillState();
+    syncIrSlider(cameras);
   } catch (e) {
     console.error("cameras poll failed", e);
   }

@@ -66,6 +66,7 @@ typedef struct {
 } ra_filter_t;
 
 static ra_filter_t ra_filter;
+static int ir_intensity = 0;
 
 static ra_filter_t *ra_filter_init(ra_filter_t *filter, size_t sample_size) {
   memset(filter, 0, sizeof(ra_filter_t));
@@ -706,11 +707,22 @@ static esp_err_t temperature_handler(httpd_req_t *req)
     return httpd_resp_send(req, resp, len);
 }
 
+static esp_err_t send_ir_val(httpd_req_t *req)
+{
+    char resp[32];
+    int len = snprintf(resp, sizeof(resp), "{\"intensity\": %d}\n", ir_intensity);
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_send(req, resp, len);
+}
+
 static esp_err_t set_ir_intensity(httpd_req_t *req)
 {
     char query[32];
     char param[8];
 
+    if (httpd_req_get_url_query_len(req) == 0) {
+        return send_ir_val(req);
+    }
     if (httpd_req_get_url_query_len(req) + 1 > sizeof(query))
     {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Query too long");
@@ -731,7 +743,8 @@ static esp_err_t set_ir_intensity(httpd_req_t *req)
     if (intensity > 255) intensity = 255;
 
     ledcWrite(IR_GPIO_NUM, intensity);
-    Serial.printf("set intensity: %d\n", intensity);
+    ir_intensity = intensity;
+    // Serial.printf("set intensity: %d\n", intensity);
     httpd_resp_set_type(req, "text/plain");
     // Serial.println(req->uri);
     return httpd_resp_send(req, "ok", 2);
@@ -936,6 +949,8 @@ void setupLedFlash() {
 void  setupIR(){
 #if defined(IR_GPIO_NUM)
   ledcAttach(IR_GPIO_NUM, 5000, 8);
+  ledcWrite(IR_GPIO_NUM, 0);
+  ir_intensity = 0;
 #else
   log_i("IR is disabled -> IR_GPIO_NUM undefined");
 #endif
