@@ -9,6 +9,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7735.h>
 #include "Sensor.h"
+#include "BME280Sensor.h" 
 
 // --- Wi-Fi Credentials ---
 const char* ssid = "TP-Link_509A";
@@ -38,9 +39,11 @@ Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 AsyncWebServer server(80);
 BH1750 light_sensor(0x23);
 SCD40 co2_sensor(0x62);
+BME280Sensor env_sensor(0x76);
 
 int light_sensor_on = 0;
 int co2_sensor_on = 0;
+int env_sensor_on = 0;
 String output;
 
 // --- Outdoor Weather State ---
@@ -141,7 +144,8 @@ void drawStaticGrid() {
   tft.print("LIGHT (lx)");
 }
 
-void updateGridValues(uint16_t co2, float temp, float hum, float lux) {
+void updateGridValues(
+    uint16_t co2, float temp, float hum, float lux) {
   tft.setTextSize(2);
 
   // 1. CO2
@@ -150,19 +154,20 @@ void updateGridValues(uint16_t co2, float temp, float hum, float lux) {
   tft.setTextColor(COLOR_VAL_CO2);
   if (co2_sensor_on) tft.print(co2);
   else tft.print("ERR");
-
+  // if (env_sensor_on) tft.print(temp, 1);
+  // else tft.print("ERR");
   // 2. In Temperature
   tft.fillRect(86, 18, 70, 18, COLOR_BG);
   tft.setCursor(86, 18);
   tft.setTextColor(COLOR_VAL_TEMP);
-  if (co2_sensor_on) tft.print(temp, 1);
+  if (env_sensor_on) tft.print(temp, 1);
   else tft.print("ERR");
 
   // 3. In Humidity
   tft.fillRect(6, 62, 70, 18, COLOR_BG);
   tft.setCursor(6, 62);
   tft.setTextColor(COLOR_VAL_HUM);
-  if (co2_sensor_on) tft.print(hum, 1);
+  if (env_sensor_on) tft.print(hum, 1);
   else tft.print("ERR");
 
   // 4. In Lux
@@ -216,18 +221,23 @@ void updateWeatherSection() {
 // -------------------------------------------------------------
 void update_sensor_data() {
   uint16_t co2 = 0;
-  float temp = 0.0;
-  float hum = 0.0;
+  float scd_temp = 0.0;
+  float scd_hum = 0.0;
   float lux = 0.0;
+  float temp = 0, hum = 0, press = 0;
 
   if (co2_sensor_on) {
     co2 = co2_sensor.getCO2();
-    temp = co2_sensor.getTemperature();
+    scd_temp = co2_sensor.getTemperature();
     hum = co2_sensor.getHumidity();
   }
-
   if (light_sensor_on) {
     lux = light_sensor.getLux();
+  }
+  if (env_sensor_on) {
+    temp  = env_sensor.getTemperature();
+    hum   = env_sensor.getHumidity();
+    press = env_sensor.getPressure();
   }
 
   updateGridValues(co2, temp, hum, lux);
@@ -241,8 +251,14 @@ void update_sensor_data() {
   JsonObject scd = doc["scd40"].to<JsonObject>();
   scd["status"]      = co2_sensor_on ? "on" : "off";
   scd["co2"]         = co2;
-  scd["temperature"] = temp;
+  scd["temperature"] = scd_temp;
   scd["humidity"]    = hum;
+
+  JsonObject env = doc["bme280"].to<JsonObject>();
+  env["status"]      = env_sensor_on ? "on" : "off";
+  env["temperature"] = temp;
+  env["humidity"]    = hum;
+  env["pressure"]    = press;
 
   JsonObject out = doc["outdoor"].to<JsonObject>();
   out["city"]        = city;
@@ -307,6 +323,7 @@ void setup() {
     // 5. Initialize Sensor hardware
     light_sensor_on = light_sensor.begin();
     co2_sensor_on   = co2_sensor.begin();
+    env_sensor_on = env_sensor.begin();
 
     // 6. Draw Dashboard layout
     drawStaticGrid();
@@ -315,6 +332,7 @@ void setup() {
     // Initial sensor sample & display push
     if (light_sensor_on) light_sensor.read();
     if (co2_sensor_on)   co2_sensor.read();
+    if (env_sensor_on) env_sensor.read();
     update_sensor_data();
 
     // 7. Start Web Server
@@ -340,6 +358,7 @@ void loop() {
 
     light_sensor_on = light_sensor.read();
     co2_sensor_on   = co2_sensor.read();
+    env_sensor_on = env_sensor.read();
     update_sensor_data();
   }
 

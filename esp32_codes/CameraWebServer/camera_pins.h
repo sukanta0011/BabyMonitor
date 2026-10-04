@@ -177,7 +177,7 @@
 #define PCLK_GPIO_NUM  22
 
 // #define LED_GPIO_NUM   4
-#define IR_GPIO_NUM    4
+#define IR_GPIO_NUM    12
 
 
 // 4 for flash led or 33 for normal led

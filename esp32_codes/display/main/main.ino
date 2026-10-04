@@ -47,7 +47,7 @@ uint8_t                             *buffer_cpy = (uint8_t*)ps_malloc(buffer_siz
 Arduino_DataBus                     *bus = new Arduino_ESP32SPI(
     TFT_DC, TFT_CS, TFT_SCLK, TFT_MOSI, GFX_NOT_DEFINED);
 Arduino_GFX                         *gfx = new Arduino_ILI9488_18bit(
-    bus, TFT_RST, 1 /* rotation */, false /* IPS */);
+    bus, TFT_RST, 3 /* rotation */, false /* IPS */);
 TaskHandle_t    readTaskHandle, extractAndDisplayTask, sensorTaskHandler;
 
 
@@ -63,9 +63,9 @@ bool outdoor_valid = false;
 uint16_t src_img_w, src_img_h;
 float scale_factor = 1.0;
 
-enum     DisplayMode { SENSORS, CAM1, CAM2 };
-volatile DisplayMode requested_mode = SENSORS;
-volatile DisplayMode current_mode = SENSORS;
+enum     DisplayMode { SENSORS, CAM1, CAM2};
+volatile DisplayMode requested_mode = CAM2;
+volatile DisplayMode current_mode = CAM2;
 
 struct  task_status 
 {
@@ -134,13 +134,16 @@ bool jpeg_output_callback(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t
     int16_t dst_h = dst_y_end - dst_y;
 
     if (dst_w <= 0 || dst_h <= 0) return true;  // block scales to nothing, skip
+    uint32_t inv = (uint32_t)(65536.0f / scale_factor);
 
     for (int16_t j = 0; j < dst_h; j++)
     {
-        int16_t src_j = min((int16_t)(j / scale_factor), (int16_t)(h - 1));
+        // int16_t src_j = min((int16_t)(j / scale_factor), (int16_t)(h - 1));
+        int16_t src_j = (j * inv) >> 16;
         for (int16_t i = 0; i < dst_w; i++)
         {
-            int16_t src_i = min((int16_t)(i / scale_factor), (int16_t)(w - 1));
+            // int16_t src_i = min((int16_t)(i / scale_factor), (int16_t)(w - 1));
+            int16_t src_i = (i * inv) >> 16;
             scaled_block[j * dst_w + i] = bitmap[src_j * w + src_i];
         }
     }
@@ -174,24 +177,50 @@ void decode_and_display(uint8_t *frame, uint32_t frame_size)
 }
 
 
-bool    extract_frame(
+// bool    extract_frame(
+//     uint8_t *data, const uint32_t size, uint32_t &start, uint32_t &end)
+// {
+    
+//     auto    it = std::search(data, data + size, marker.begin(), marker.end());
+//     if (it == (data + size)) { return false;}
+//     start = std::distance(data, it + marker.size());
+//     auto    end_it = std::search(
+//         it + marker.size(), data + size, marker.begin(), marker.end());
+//     if (end_it == data + size) { return false; }
+//     end = std::distance(data, end_it);
+//     return true;
+// }
+
+
+bool extract_frame(
     uint8_t *data, const uint32_t size, uint32_t &start, uint32_t &end)
 {
-    
-    auto    it = std::search(data, data + size, marker.begin(), marker.end());
-    if (it == (data + size)) { return false;}
-    start = std::distance(data, it + marker.size());
-    auto    end_it = std::search(
-        it + marker.size(), data + size, marker.begin(), marker.end());
-    if (end_it == data + size) { return false; }
-    end = std::distance(data, end_it);
+    using rev = std::reverse_iterator<uint8_t*>;
+    rev rbegin(data + size), rend(data);
+
+    // last marker in the buffer (searching from the end)
+    auto last = std::search(rbegin, rend, marker.rbegin(), marker.rend());
+    if (last == rend) { return false; }
+
+    // marker before that one: continue searching past the last marker
+    auto prev = std::search(last + marker.size(), rend,
+                            marker.rbegin(), marker.rend());
+    if (prev == rend) { return false; }
+
+    // .base() points one past the element a reverse iterator refers to,
+    // so subtract marker.size() to land on the marker's first byte
+    uint8_t *last_marker_start = last.base() - marker.size();
+    uint8_t *prev_marker_start = prev.base() - marker.size();
+
+    start = (prev_marker_start + marker.size()) - data;
+    end   = last_marker_start - data;
     return true;
 }
 
 
 void    draw_sensor_panel()
 {
-    Serial.println("Sensor panle drawing...");
+    // Serial.println("Sensor panle drawing...");
     int screen_w = 480;
     int screen_h = 320;
     int strip_h = 50;
@@ -279,7 +308,7 @@ void    draw_sensor_panel()
         gfx->setCursor(x + 20, y + cell_h / 2);
         gfx->println(cells[i].value);
     }
-    Serial.println("Sensor panle drawing completed");
+    // Serial.println("Sensor panle drawing completed");
 }
 
 
@@ -319,7 +348,7 @@ void sensor_task(void *parameter)
     // Serial.print("sensor_task running on core: ");
     // Serial.println(xPortGetCoreID());
 
-    Serial.println("sensor_task function");
+    // Serial.println("sensor_task function");
     while (true)
     {
         fetch_sensors();
@@ -375,7 +404,7 @@ void    stop_live_stream()
 void    fetch_sensors()
 {
     // Serial.println("sensor task running...");
-    Serial.println("fetch_sensors func");
+    // Serial.println("fetch_sensors func");
     sensorHttp.begin("http://pi5.local:8000/sensors");
     sensorHttp.setReuse(false);
     httpCode = sensorHttp.GET();
@@ -454,28 +483,42 @@ void    flush_buffer_cpy()
     }
 }
 
+void stop_everything()
+{
+    if (taskStatus.display_task) vTaskSuspend(extractAndDisplayTask);
+    if (taskStatus.read_task)    vTaskSuspend(readTaskHandle);
+    if (taskStatus.sensor_task)  vTaskSuspend(sensorTaskHandler);
+    cam1Http.end();
+    cam2Http.end();
+    taskStatus.cam1_stream_status = false;
+    taskStatus.cam2_stream_status = false;
+    taskStatus.sensor_stream_status = false;
+}
+
 void    switch_to_mode(DisplayMode mode) {
     gfx->fillScreen(0);
+    stop_everything();
+    current_mode = mode;
 
     if (mode == SENSORS) {
-        Serial.println("SENSORS starting...");
+        // Serial.println("SENSORS starting...");
         start_sensor_stream();
         current_mode = mode;
         taskStatus.sensor_stream_status = true;
-        Serial.println("SENSORS started");
-        if (taskStatus.cam2_stream_status)
-        { 
-            stop_live_stream();
-            // flush_old_stream(cam2Stream);
-            cam2Http.end();
-            taskStatus.cam2_stream_status = false;
-        }
-        else if (taskStatus.cam1_stream_status)
-        { 
-            stop_live_stream();
-            cam1Http.end();
-            taskStatus.cam1_stream_status = false;
-        }
+        // Serial.println("SENSORS started");
+        // if (taskStatus.cam2_stream_status)
+        // { 
+        //     stop_live_stream();
+        //     // flush_old_stream(cam2Stream);
+        //     cam2Http.end();
+        //     taskStatus.cam2_stream_status = false;
+        // }
+        // else if (taskStatus.cam1_stream_status)
+        // { 
+        //     stop_live_stream();
+        //     cam1Http.end();
+        //     taskStatus.cam1_stream_status = false;
+        // }
         // return;
     }
     if (mode == CAM1)
@@ -493,15 +536,15 @@ void    switch_to_mode(DisplayMode mode) {
             start_live_stream();
             current_mode = mode;
             taskStatus.cam1_stream_status = true;
-            if (taskStatus.sensor_stream_status) { 
-                stop_sensor_stream(); 
-                taskStatus.sensor_stream_status = false;
-            }
-            if (taskStatus.cam2_stream_status)
-            { 
-                // flush_old_stream(cam2Stream);
-                cam2Http.end(); 
-            }
+            // if (taskStatus.sensor_stream_status) { 
+            //     stop_sensor_stream(); 
+            //     taskStatus.sensor_stream_status = false;
+            // }
+            // if (taskStatus.cam2_stream_status)
+            // { 
+            //     // flush_old_stream(cam2Stream);
+            //     cam2Http.end(); 
+            // }
             Serial.println("CAM1 started");
         } else {
             Serial.print("Unable to connect to Pi5. HTTP Code: ");
@@ -528,15 +571,15 @@ void    switch_to_mode(DisplayMode mode) {
             start_live_stream();
             current_mode = mode;
             taskStatus.cam2_stream_status = true;
-            if (taskStatus.sensor_stream_status) { 
-                stop_sensor_stream(); 
-                taskStatus.sensor_stream_status = false;
-            }
-            if (taskStatus.cam1_stream_status)
-            { 
-                // flush_old_stream(cam1Stream);
-                cam1Http.end(); 
-            }
+            // if (taskStatus.sensor_stream_status) { 
+            //     stop_sensor_stream(); 
+            //     taskStatus.sensor_stream_status = false;
+            // }
+            // if (taskStatus.cam1_stream_status)
+            // { 
+            //     // flush_old_stream(cam1Stream);
+            //     cam1Http.end(); 
+            // }
             Serial.println("CAM2 started");
         }
         else {
