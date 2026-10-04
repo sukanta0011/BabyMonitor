@@ -7,10 +7,17 @@ a video feed.
 **Not a medical device.** It's an engineering project — real-time CV,
 embedded firmware, systems design. See [Known Limitations](#known-limitations).
 
-![](https://github.com/sukanta0011/BabyMonitor/blob/main/screenshots/preview.webp)
-![](https://github.com/sukanta0011/BabyMonitor/blob/main/screenshots/camera.webp)
-![](https://github.com/sukanta0011/BabyMonitor/blob/main/screenshots/co2.webp)
-![](https://github.com/sukanta0011/BabyMonitor/blob/main/screenshots/pi5.webp)
+<table>
+  <tr>
+    <td><img src="screenshots/preview.webp"></td>
+    <td><img src="screenshots/camera.webp"></td>
+    <td><img src="screenshots/co2.webp"></td>
+    <td><img src="screenshots/pi5.webp"></td>
+  </tr>
+  <tr align="center">
+    <td> Portable display unit + Web-version </td><td>Night-vision camera</td><td>Sensor node</td><td>Pi5 Server</td>
+  </tr>
+</table>
 
 
 For the full story — why things are built this way, bugs hit and how they
