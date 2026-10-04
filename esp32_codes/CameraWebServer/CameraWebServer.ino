@@ -2,6 +2,7 @@
 #include "esp_camera.h"
 #include <WiFi.h>
 #include <ESPmDNS.h>
+#include "search.h"
 
 // ===========================
 // Select camera model in board_config.h
@@ -16,11 +17,7 @@ uint8_t temprature_sens_read(); // Note the historic spelling in the Espressif R
 }
 #endif
 
-// ===========================
-// Enter your WiFi credentials
-// ===========================
-const char* ssid = "TP-Link_509A";
-const char* password = "84710574";
+
 const char* mdnsName = "esp32_cam2";
 
 void startCameraServer();
@@ -141,7 +138,7 @@ void setup() {
     setupIR();
   #endif
 
-  WiFi.begin(ssid, password);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   // WiFi.setSleep(false);
 
   Serial.print("WiFi connecting");

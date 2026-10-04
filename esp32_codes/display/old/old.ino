@@ -12,8 +12,6 @@
 #define TFT_DC   15
 #define TFT_RST  16
 
-const char* ssid = "TP-Link_509A";
-const char* password = "84710574";
 HTTPClient  http;
 WiFiClient* stream;
 int httpCode;
@@ -24,7 +22,7 @@ Arduino_GFX *gfx = new Arduino_ILI9488_18bit(bus, TFT_RST, 1 /* rotation */, fal
 
 int connect_to_wifi() {
   int max_try = 20;
-  WiFi.begin(ssid, password);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   while (WiFi.status() != WL_CONNECTED && max_try > 0) {
     delay(1000);
     max_try -= 1;

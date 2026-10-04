@@ -1,6 +1,7 @@
 #include "esp_camera.h"
 #include "esp_http_server.h"
 #include <WiFi.h>
+#include "search.h"
 
 // --- AI-Thinker Pin Mapping ---
 #define PWDN_GPIO_NUM   32
@@ -184,7 +185,8 @@ void setup()
     }
 
     // Connect Wi-Fi
-    if (!connect_wifi("TP-Link_509A", "84710574")) {
+
+    if (!connect_wifi(WIFI_SSID, WIFI_PASSWORD)) {
         Serial.println("Wi-Fi connection failed!");
         return;
     }

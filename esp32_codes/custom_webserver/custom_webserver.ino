@@ -4,9 +4,7 @@
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include "Sensor.h"
-
-const char* ssid = "TP-Link_509A";
-const char* password = "84710574";
+#include "secrets.h"
 
 // // ESP32 CAM
 // const int SDA_PIN = 15;
@@ -31,7 +29,7 @@ SemaphoreHandle_t mutex;
 
 int connect_to_wifi() {
   int max_try = 20;
-  WiFi.begin(ssid, password);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   while (WiFi.status() != WL_CONNECTED && max_try > 0) {
     delay(1000);
     max_try -= 1;

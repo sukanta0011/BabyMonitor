@@ -9,11 +9,9 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7735.h>
 #include "Sensor.h"
-#include "BME280Sensor.h" 
+#include "BME280Sensor.h"
+#include "secrets.h"
 
-// --- Wi-Fi Credentials ---
-const char* ssid = "TP-Link_509A";
-const char* password = "84710574";
 const char* mdnsName = "esp8266_sensor1";
 
 // --- Pin Setup ---
@@ -274,7 +272,7 @@ void update_sensor_data() {
 
 int connect_to_wifi() {
   int max_try = 20;
-  WiFi.begin(ssid, password);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   while (WiFi.status() != WL_CONNECTED && max_try > 0) {
     delay(500);
     max_try -= 1;

@@ -1,13 +1,11 @@
 #include "utils.hpp"
+#include "secrets.h"
 
 
 int     connect_to_wifi()
 {
-    const char* ssid = "TP-Link_509A";
-    const char* password = "84710574";
-
     int max_try = 20;
-    WiFi.begin(ssid, password);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     while (WiFi.status() != WL_CONNECTED && max_try > 0) {
         delay(1000);
         max_try -= 1;
