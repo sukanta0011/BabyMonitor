@@ -9,9 +9,9 @@ secrets.h
 
 # Distribution / packaging
 .Python
-logs/
+# logs/
 build/
-logs
+# logs
 develop-eggs/
 dist/
 downloads/
