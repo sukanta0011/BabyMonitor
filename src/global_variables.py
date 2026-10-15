@@ -5,10 +5,10 @@ NUM_OF_CAMS = 3
 FACE_DETECTION_THRESHOLD = 0.4
 SHUTDOWN_EVENT = threading.Event()
 # PRINT_LOCK = threading.Lock()
-CAM1 = "http://192.168.1.104:81/stream"
+CAM1 = "http://192.168.1.100:81/stream"
 CAM2 = "http://192.168.1.105:81/stream"
 # SENSORS = "http://esp32_sensor1.local/sensors"
-SENSORS = "http://192.168.1.111/sensors"
+SENSORS = "http://192.168.1.101/sensors"
 DATABASE_URL =\
     "postgresql+asyncpg://baby_monitor:baby_monitor@db/baby_monitor_db"
 
